@@ -8,4 +8,8 @@ add_compile_options(-Wall -Wextra -Wpedantic -Werror)
 
 include_directories(include)
 
-add_executable(minidb_cli src/main.cpp src/Database.cpp)
+add_executable(minidb_cli 
+    src/main.cpp 
+    src/Database.cpp
+    src/Repl.cpp
+)
