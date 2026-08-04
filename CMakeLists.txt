@@ -6,9 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_compile_options(-Wall -Wextra -Wpedantic -Werror)
 
-include_directories(include)
-
-# Build the core into a separate library
+# --- Core Library ---
 add_library(minidb_core
     src/Database.cpp 
     src/Repl.cpp
@@ -16,30 +14,25 @@ add_library(minidb_core
     src/Page.cpp
 )
 
-# Main executable
+target_include_directories(minidb_core PUBLIC include)
+
+# --- CLI Executable ---
 add_executable(minidb_cli src/main.cpp)
 target_link_libraries(minidb_cli PRIVATE minidb_core)
 
-# --- GoogleTest setup ---
-include(FetchContent)
-FetchContent_Declare(
-  googletest
-  URL https://github.com/google/googletest/archive/03597a01ee50ed33e9dfd640b249b4be3799d395.zip
-)
-set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(googletest)
+# --- Testing Setup ---
+option(BUILD_TESTING "Build unit tests" ON)
 
-enable_testing()
+if(BUILD_TESTING)
+    include(FetchContent)
+    FetchContent_Declare(
+      googletest
+      URL https://github.com/google/googletest/archive/03597a01ee50ed33e9dfd640b249b4be3799d395.zip
+      DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    )
+    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(googletest)
 
-# --- Tests ---
-add_executable(test_pager tests/test_pager.cpp)
-target_link_libraries(test_pager PRIVATE minidb_core GTest::gtest_main)
-add_test(NAME PagerTest COMMAND test_pager)
-
-add_executable(test_page tests/test_page.cpp)
-target_link_libraries(test_page PRIVATE minidb_core GTest::gtest_main)
-add_test(NAME PageTest COMMAND test_page)
-
-add_executable(test_database tests/test_database.cpp)
-target_link_libraries(test_database PRIVATE minidb_core GTest::gtest_main)
-add_test(NAME DatabaseTest COMMAND test_database)
+    enable_testing()
+    add_subdirectory(tests)
+endif()
