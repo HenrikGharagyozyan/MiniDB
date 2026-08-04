@@ -23,16 +23,18 @@ namespace minidb
     public:
         explicit Page(PageData& raw_data);
 
-    // Initialize a new empty page
-    void init();
+        // Initialize a new empty page
+        void init();
 
-    // Insert a key-value pair. Returns false if there is no room on the page
-    bool insert_record(const std::string& key, const std::string& value);
+        // Insert a key-value pair. Returns false if there is no room on the page
+        bool insert_record(const std::string& key, const std::string& value);
 
-    // Get a record by its sequential index
-    std::optional<std::pair<std::string, std::string>> get_record(uint16_t index) const;
+        // Get a record by its sequential index
+        std::optional<std::pair<std::string, std::string>> get_record(uint16_t index) const;
 
-    // Helper methods
+        // Helper methods
+        uint16_t num_records() const;
+        size_t free_space_left() const;
 
     private:
         PageData& data_;
