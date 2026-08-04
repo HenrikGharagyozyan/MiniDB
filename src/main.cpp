@@ -18,35 +18,47 @@
 // TEMP TEST
 // ======================
 #include "minidb/Pager.h"
+#include "minidb/Page.h"
 #include <iostream>
-#include <cstring>
-
 
 int main() 
 {
-    std::cout << "Testing Pager...\n";
+    std::cout << "Testing Page Storage Engine...\n";
 
-    minidb::Pager pager("test_data.db");
+    minidb::Pager pager("page_test.db");
 
     if (pager.num_pages() == 0) 
     {
-        std::cout << "Allocating Page 0...\n";
+        std::cout << "Allocating Page 0 and inserting records...\n";
         pager.allocate_page();
 
-        minidb::PageData data{};
-        const char* message = "Hello, Page Storage!";
-        std::memcpy(data.data(), message, std::strlen(message));
+        minidb::PageData raw_page{};
+        minidb::Page page(raw_page);
+        page.init();
 
-        pager.write_page(0, data);
-        std::cout << "Written to Page 0: " << message << "\n";
+        page.insert_record("name", "Henrik");
+        page.insert_record("role", "C++ Developer");
+        page.insert_record("city", "Vardenis");
+
+        pager.write_page(0, raw_page);
+        std::cout << "Saved 3 records to Page 0.\n";
     } 
     else 
     {
-        std::cout << "Total pages in file: " << pager.num_pages() << "\n";
-        minidb::PageData read_data{};
-        if (pager.read_page(0, read_data)) 
+        std::cout << "Reading Page 0 from disk...\n";
+        minidb::PageData raw_page{};
+        pager.read_page(0, raw_page);
+
+        minidb::Page page(raw_page);
+        std::cout << "Records count on page: " << page.num_records() << "\n";
+
+        for (uint16_t i = 0; i < page.num_records(); ++i) 
         {
-            std::cout << "Read from Page 0: " << reinterpret_cast<const char*>(read_data.data()) << "\n";
+            auto rec = page.get_record(i);
+            if (rec) 
+            {
+                std::cout << "  [" << i << "] " << rec->first << " => " << rec->second << "\n";
+            }
         }
     }
 

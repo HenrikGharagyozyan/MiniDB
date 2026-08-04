@@ -13,4 +13,5 @@ add_executable(minidb_cli
     src/Database.cpp
     src/Repl.cpp
     src/Pager.cpp
+    src/Page.cpp
 )
