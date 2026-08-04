@@ -26,7 +26,7 @@ namespace minidb
 
             if (!executeCommand(line)) 
             {
-                break; // Если executeCommand вернул false, выходим из цикла
+                break; // If executeCommand returned false, exit the loop
             }
         }
     }
@@ -45,7 +45,7 @@ namespace minidb
         if (command == "EXIT" || command == "QUIT") 
         {
             std::cout << "Bye!\n";
-            return false; // Сигнал к завершению REPL
+            return false; // Signal to terminate the REPL
         } 
         else if (command == "SET") 
         {

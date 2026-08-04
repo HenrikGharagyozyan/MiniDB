@@ -1,27 +1,26 @@
 #pragma once
 
+#include "minidb/Pager.h"
+
 #include <string>
-#include <unordered_map>
 #include <optional>
+#include <memory>
+
 
 namespace minidb 
 {
-
     class Database 
     {
     public:
         explicit Database(std::string filename);
 
         void set(const std::string& key, const std::string& value);
-        std::optional<std::string> get(const std::string& key) const;
+        std::optional<std::string> get(const std::string& key);
         void remove(const std::string& key);
 
     private:
-        std::unordered_map<std::string, std::string> data_;
         std::string filename_;
-
-        void loadFromFile();
-        void saveToFile() const;
+        std::unique_ptr<Pager> pager_;
     };
 
 } // namespace minidb
