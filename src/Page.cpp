@@ -26,7 +26,7 @@ namespace minidb
         PageHeader* h = header();
         h->page_type = 0;
         h->num_records = 0;
-        h->free_space_offset = sizeof(PageHeader); // Смещение = 6 байт
+        h->free_space_offset = sizeof(PageHeader); // Offset = 6 bytes
     }
 
     uint16_t Page::num_records() const 
@@ -45,34 +45,34 @@ namespace minidb
 
     bool Page::insert_record(const std::string& key, const std::string& value) 
     {
-        // Формат записи: [uint16_t key_len][uint16_t val_len][key bytes][value bytes]
+        // Record format: [uint16_t key_len][uint16_t val_len][key bytes][value bytes]
         uint16_t key_len = static_cast<uint16_t>(key.size());
         uint16_t val_len = static_cast<uint16_t>(value.size());
         size_t total_record_size = sizeof(uint16_t) + sizeof(uint16_t) + key_len + val_len;
 
         if (free_space_left() < total_record_size) 
         {
-            return false; // Страница переполнена
+            return false; // Page is full
         }
 
         PageHeader* h = header();
         uint8_t* write_ptr = data_.data() + h->free_space_offset;
 
-        // Пишем длины
+        // Write lengths
         std::memcpy(write_ptr, &key_len, sizeof(uint16_t));
         write_ptr += sizeof(uint16_t);
 
         std::memcpy(write_ptr, &val_len, sizeof(uint16_t));
         write_ptr += sizeof(uint16_t);
 
-        // Пишем сами строки
+        // Write the strings themselves
         std::memcpy(write_ptr, key.data(), key_len);
         write_ptr += key_len;
 
         std::memcpy(write_ptr, value.data(), val_len);
         write_ptr += val_len;
 
-        // Обновляем метаданные в заголовке страницы
+        // Update page header metadata
         h->free_space_offset += static_cast<uint16_t>(total_record_size);
         h->num_records += 1;
 
@@ -87,7 +87,7 @@ namespace minidb
             return std::nullopt;
         }
 
-        // Сканируем запись за записью от начала данных (сразу за заголовком)
+        // Scan record by record from the beginning of the data area (immediately after the header)
         const uint8_t* read_ptr = data_.data() + sizeof(PageHeader);
 
         for (uint16_t i = 0; i < h->num_records; ++i) 

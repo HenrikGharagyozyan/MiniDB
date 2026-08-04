@@ -8,10 +8,34 @@ add_compile_options(-Wall -Wextra -Wpedantic -Werror)
 
 include_directories(include)
 
-add_executable(minidb_cli 
-    src/main.cpp 
-    src/Database.cpp
+# Build the core into a separate library
+add_library(minidb_core
+    src/Database.cpp 
     src/Repl.cpp
     src/Pager.cpp
     src/Page.cpp
 )
+
+# Main executable
+add_executable(minidb_cli src/main.cpp)
+target_link_libraries(minidb_cli PRIVATE minidb_core)
+
+# --- GoogleTest setup ---
+include(FetchContent)
+FetchContent_Declare(
+  googletest
+  URL https://github.com/google/googletest/archive/03597a01ee50ed33e9dfd640b249b4be3799d395.zip
+)
+set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(googletest)
+
+enable_testing()
+
+# --- Тесты ---
+add_executable(test_pager tests/test_pager.cpp)
+target_link_libraries(test_pager PRIVATE minidb_core GTest::gtest_main)
+add_test(NAME PagerTest COMMAND test_pager)
+
+add_executable(test_page tests/test_page.cpp)
+target_link_libraries(test_page PRIVATE minidb_core GTest::gtest_main)
+add_test(NAME PageTest COMMAND test_page)

@@ -9,16 +9,16 @@ namespace minidb
     class Repl 
     {
     public:
-        // Принимаем ссылку на базу данных, чтобы Repl не владел ею, а только использовал
+        // Take a reference to the database so Repl does not own it, only uses it
         explicit Repl(Database& db);
 
-        // Главный цикл
+        // Main loop
         void run();
 
     private:
         Database& db_;
         
-        // Обработчик одной строки ввода
+        // Handler for a single input line
         bool executeCommand(const std::string& line);
     };
 
