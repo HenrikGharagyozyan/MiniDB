@@ -1,6 +1,7 @@
 #pragma once
 
 #include "minidb/Pager.h"
+#include "minidb/Wal.h"
 
 #include <string>
 #include <optional>
@@ -9,6 +10,7 @@
 
 namespace minidb 
 {
+
     class Database 
     {
     public:
@@ -21,6 +23,10 @@ namespace minidb
     private:
         std::string filename_;
         std::unique_ptr<Pager> pager_;
+        std::unique_ptr<Wal> wal_;
+
+        // Вспомогательный метод для физической записи на страницу
+        void write_to_page(const std::string& key, const std::string& value);
     };
 
 } // namespace minidb
