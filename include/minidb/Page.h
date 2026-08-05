@@ -9,23 +9,48 @@
 namespace minidb 
 {
 
-    #pragma pack(push, 1) // Disable compiler padding so the structure is exactly 6 bytes
+    constexpr uint32_t INVALID_PAGE_ID = 0xFFFFFFFF;
+
+    enum class NodeType : uint8_t 
+    {
+        LEAF = 0,
+        INTERNAL = 1
+    };
+
+    #pragma pack(push, 1) // Disable padding
     struct PageHeader 
     {
-        uint16_t page_type{0};          // 0 = Leaf/Data Page
-        uint16_t num_records{0};        // Number of records
-        uint16_t free_space_offset{6};  // Offset from where a new record can be written (starts immediately after the header)
+        NodeType type;                  // 1 byte: node type (Leaf / Internal)
+        uint8_t is_root;                // 1 byte: 1 if root, 0 otherwise
+        uint16_t num_cells;             // 2 bytes: number of records/keys
+        uint16_t free_space_offset;     // 2 bytes: offset to free space
+        uint32_t parent_page_id;        // 4 bytes: parent page ID
+        uint32_t next_leaf_id;          // 4 bytes: right sibling ID (for range scan)
+        uint32_t rightmost_child;       // 4 bytes: rightmost child ID (for internal node)
     };
     #pragma pack(pop)
+
 
     class Page 
     {
     public:
         explicit Page(PageData& raw_data);
 
-        // Initialize a new empty page
-        void init();
+        // Initialization. Default creates a leaf node.
+        void init(NodeType type = NodeType::LEAF, bool is_root = false);
 
+        // Getters and setters for B+ tree metadata
+        NodeType node_type() const;
+        bool is_root() const;
+        void set_root(bool is_root);
+
+        uint32_t parent_id() const;
+        void set_parent_id(uint32_t parent_id);
+
+        uint32_t next_leaf_id() const;
+        void set_next_leaf_id(uint32_t next_leaf_id);
+
+        // TODO
         // Insert a key-value pair. Returns false if there is no room on the page
         bool insert_record(const std::string& key, const std::string& value);
 

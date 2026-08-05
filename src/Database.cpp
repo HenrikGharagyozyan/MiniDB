@@ -14,7 +14,7 @@ namespace minidb
         : filename_(std::move(filename)) 
     {
         pager_ = std::make_unique<Pager>(filename_);
-        // Лог-файл будет иметь имя базы данных + ".log"
+        // The WAL file is named after the database plus ".log"
         wal_ = std::make_unique<Wal>(filename_ + ".log");
 
         // If the file is new/empty, initialize the first page (root)
@@ -42,7 +42,7 @@ namespace minidb
                     write_to_page(record.key, TOMBSTONE);
                 }
             }
-            // После успешного наката всех записей на страницы, очищаем лог
+            // After successfully applying all records to pages, clear the WAL
             wal_->clear();
         }
     }
@@ -58,7 +58,7 @@ namespace minidb
 
         Page page(raw_page);
         
-        // Если на текущей странице нет места для записи, выделяем новую
+        // If the current page has no room for the record, allocate a new one
         if (!page.insert_record(key, value)) 
         {
             last_page_id = pager_->allocate_page();
@@ -66,24 +66,24 @@ namespace minidb
             Page new_page(new_raw_page);
             new_page.init();
             
-            // Вставляем в новую страницу
+            // Insert into the new page
             new_page.insert_record(key, value);
             pager_->write_page(last_page_id, new_raw_page);
         } 
         else 
         {
-            // Записываем обновленную страницу обратно на диск
+            // Write the updated page back to disk
             pager_->write_page(last_page_id, raw_page);
         }
     }
 
     void Database::set(const std::string& key, const std::string& value)
     {
-        // Сначала строго пишем в WAL и делаем flush на диск
+        // First write strictly to the WAL and flush to disk
         wal_->append_set(key, value);
         wal_->flush();
 
-        // Только после этого изменяем страницы
+        // Only after that modify pages
         write_to_page(key, value);
     }
 
@@ -92,7 +92,7 @@ namespace minidb
         if (pager_->num_pages() == 0) 
             return std::nullopt;
 
-        // Ищем с конца к началу (Append-Only: последняя запись - самая свежая)
+        // Search from end to beginning (append-only: the latest record is the freshest)
         for (int32_t page_id = pager_->num_pages() - 1; page_id >= 0; --page_id) 
         {
             PageData raw_page{};
@@ -100,7 +100,7 @@ namespace minidb
             
             Page page(raw_page);
             
-            // Сканируем записи на странице тоже с конца
+            // Scan records on the page from the end as well
             for (int32_t rec_idx = page.num_records() - 1; rec_idx >= 0; --rec_idx) 
             {
                 auto rec = page.get_record(static_cast<uint16_t>(rec_idx));
@@ -108,9 +108,9 @@ namespace minidb
                 {
                     if (rec->second == TOMBSTONE) 
                     {
-                        return std::nullopt; // Ключ был удален
+                        return std::nullopt; // Key was deleted
                     }
-                    return rec->second; // Нашли актуальное значение!
+                    return rec->second; // Found the latest value!
                 }
             }
         }
@@ -120,11 +120,11 @@ namespace minidb
 
     void Database::remove(const std::string& key) 
     {
-        // Пишем в WAL об удалении
+        // Write deletion to the WAL
         wal_->append_delete(key);
         wal_->flush();
 
-        // Пишем томбстоун на страницу
+        // Write a tombstone to the page
         write_to_page(key, TOMBSTONE);
     }
 
