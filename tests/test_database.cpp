@@ -63,10 +63,10 @@ TEST_F(DatabaseTest, PersistenceAcrossInstances)
     {
         minidb::Database db(db_file);
         db.set("persistent_key", "persistent_value");
-    } // db закрывается и уничтожается
+    } // db closes and is destroyed
 
     {
-        // Открываем заново тот же файл
+        // Reopen the same file
         minidb::Database db(db_file);
         EXPECT_EQ(db.get("persistent_key"), "persistent_value");
     }
