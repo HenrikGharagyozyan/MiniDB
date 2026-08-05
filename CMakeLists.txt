@@ -12,6 +12,7 @@ add_library(minidb_core
     src/Repl.cpp
     src/Pager.cpp
     src/Page.cpp
+    src/Wal.cpp
 )
 
 target_include_directories(minidb_core PUBLIC include)
