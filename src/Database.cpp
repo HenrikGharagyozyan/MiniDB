@@ -17,15 +17,21 @@ namespace minidb
         // The WAL file is named after the database plus ".log"
         wal_ = std::make_unique<Wal>(filename_ + ".log");
 
+        PageId root_page_id = 0;
+
         // If the file is new/empty, initialize the first page (root)
         if (pager_->num_pages() == 0) 
         {
-            PageId root_page_id = pager_->allocate_page();
+            root_page_id = pager_->allocate_page();
             PageData raw_page{};
             Page page(raw_page);
-            page.init();
+            // Используем новую сигнатуру init для корня
+            page.init(NodeType::LEAF, true);
             pager_->write_page(root_page_id, raw_page);
         }
+
+        // Инициализируем B-дерево
+        btree_ = std::make_unique<BTree>(*pager_, root_page_id);
 
         // --- Crash Recovery Stage ---
         auto uncommitted_records = wal_->recover();
@@ -35,45 +41,15 @@ namespace minidb
             {
                 if (record.type == LogRecordType::SET) 
                 {
-                    write_to_page(record.key, record.value);
+                    btree_->insert(record.key, record.value);
                 } 
                 else if (record.type == LogRecordType::DELETE) 
                 {
-                    write_to_page(record.key, TOMBSTONE);
+                    btree_->insert(record.key, TOMBSTONE);
                 }
             }
             // After successfully applying all records to pages, clear the WAL
             wal_->clear();
-        }
-    }
-
-    void Database::write_to_page(const std::string& key, const std::string& value)
-    {
-        if (pager_->num_pages() == 0) 
-            return;
-
-        PageId last_page_id = pager_->num_pages() - 1;
-        PageData raw_page{};
-        pager_->read_page(last_page_id, raw_page);
-
-        Page page(raw_page);
-        
-        // If the current page has no room for the record, allocate a new one
-        if (!page.insert_record(key, value)) 
-        {
-            last_page_id = pager_->allocate_page();
-            PageData new_raw_page{};
-            Page new_page(new_raw_page);
-            new_page.init();
-            
-            // Insert into the new page
-            new_page.insert_record(key, value);
-            pager_->write_page(last_page_id, new_raw_page);
-        } 
-        else 
-        {
-            // Write the updated page back to disk
-            pager_->write_page(last_page_id, raw_page);
         }
     }
 
@@ -83,33 +59,22 @@ namespace minidb
         wal_->append_set(key, value);
         wal_->flush();
 
-        // Only after that modify pages
-        write_to_page(key, value);
+        // Only after that modify the BTree
+        btree_->insert(key, value);
     }
 
     std::optional<std::string> Database::get(const std::string& key) 
     {
-        if (pager_->num_pages() == 0) 
-            return std::nullopt;
-
-        // Search pages from end to beginning (before the tree is built)
-        for (int32_t page_id = pager_->num_pages() - 1; page_id >= 0; --page_id) 
+        // Use our new fast O(log N) search via BTree!
+        auto val_opt = btree_->get(key);
+        
+        if (val_opt) 
         {
-            PageData raw_page{};
-            pager_->read_page(static_cast<PageId>(page_id), raw_page);
-            
-            Page page(raw_page);
-            
-            // Use our new fast binary search inside the page!
-            auto val_opt = page.get(key);
-            if (val_opt) 
+            if (*val_opt == TOMBSTONE) 
             {
-                if (*val_opt == TOMBSTONE) 
-                {
-                    return std::nullopt; // Key was deleted
-                }
-                return *val_opt; // Found the latest value
+                return std::nullopt; // Key was deleted
             }
+            return *val_opt; // Found the latest value
         }
         
         return std::nullopt;
@@ -121,8 +86,8 @@ namespace minidb
         wal_->append_delete(key);
         wal_->flush();
 
-        // Write a tombstone to the page
-        write_to_page(key, TOMBSTONE);
+        // Write a tombstone to the BTree
+        btree_->insert(key, TOMBSTONE);
     }
 
 } // namespace minidb   
