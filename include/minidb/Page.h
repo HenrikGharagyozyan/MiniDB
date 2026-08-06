@@ -23,7 +23,7 @@ namespace minidb
         NodeType type;                  // 1 byte: node type (Leaf / Internal)
         uint8_t is_root;                // 1 byte: 1 if root, 0 otherwise
         uint16_t num_cells;             // 2 bytes: number of records/keys
-        uint16_t free_space_offset;     // 2 bytes: offset to free space
+        uint16_t free_space_pointer;    // 2 bytes: offset to free space
         uint32_t parent_page_id;        // 4 bytes: parent page ID
         uint32_t next_leaf_id;          // 4 bytes: right sibling ID (for range scan)
         uint32_t rightmost_child;       // 4 bytes: rightmost child ID (for internal node)
@@ -50,7 +50,12 @@ namespace minidb
         uint32_t next_leaf_id() const;
         void set_next_leaf_id(uint32_t next_leaf_id);
 
-        // TODO
+        // Бинарный поиск позиции ключа на странице
+        uint16_t find_cell_index(const std::string& key) const;
+
+        // Поиск значения по ключу за O(log K)
+        std::optional<std::string> get(const std::string& key) const;
+
         // Insert a key-value pair. Returns false if there is no room on the page
         bool insert_record(const std::string& key, const std::string& value);
 
@@ -62,10 +67,17 @@ namespace minidb
         size_t free_space_left() const;
 
     private:
+        // Вспомогательные методы работы со слотами
+        uint16_t cell_offset(uint16_t index) const;
+        void set_cell_offset(uint16_t index, uint16_t offset);
+        std::string get_key(uint16_t index) const;
+    
+    private:
         PageData& data_;
 
         PageHeader* header();
         const PageHeader* header() const;
+
     };
 
 } // namespace minidb

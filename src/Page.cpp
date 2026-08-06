@@ -1,7 +1,5 @@
 #include "minidb/Page.h"
-
 #include <cstring>
-
 
 namespace minidb 
 {
@@ -21,22 +19,20 @@ namespace minidb
         return reinterpret_cast<const PageHeader*>(data_.data());
     }
 
-    void Page::init(NodeType type, bool is_root)
+    void Page::init(NodeType type, bool is_root) 
     {
         PageHeader* h = header();
         h->type = type;
         h->is_root = is_root ? 1 : 0;
         h->num_cells = 0;
-        h->free_space_offset = sizeof(PageHeader); // Now offset = 18 bytes
+        h->free_space_pointer = PAGE_SIZE; // Свободное место для данных растет с самого конца (4096)
         h->parent_page_id = INVALID_PAGE_ID;
         h->next_leaf_id = INVALID_PAGE_ID;
         h->rightmost_child = INVALID_PAGE_ID;
     }
 
+    // --- Метаданные ---
 
-    // ----------------------------
-    // --- B+ tree metadata ---
-    // ----------------------------
     NodeType Page::node_type() const { return header()->type; }
     bool Page::is_root() const { return header()->is_root != 0; }
     void Page::set_root(bool is_root) { header()->is_root = is_root ? 1 : 0; }
@@ -47,10 +43,6 @@ namespace minidb
     uint32_t Page::next_leaf_id() const { return header()->next_leaf_id; }
     void Page::set_next_leaf_id(uint32_t next_leaf_id) { header()->next_leaf_id = next_leaf_id; }
 
-
-    // ----------------------------
-    // --- Record handling ---
-    // ----------------------------
     uint16_t Page::num_records() const 
     {
         return header()->num_cells;
@@ -58,26 +50,112 @@ namespace minidb
 
     size_t Page::free_space_left() const 
     {
-        if (header()->free_space_offset >= PAGE_SIZE) 
+        const PageHeader* h = header();
+        // Массив слотов заканчивается на: sizeof(PageHeader) + num_cells * 2
+        size_t slots_end = sizeof(PageHeader) + h->num_cells * sizeof(uint16_t);
+        
+        if (h->free_space_pointer <= slots_end) 
         {
             return 0;
         }
-        return PAGE_SIZE - header()->free_space_offset;
+        
+        return h->free_space_pointer - slots_end;
+    }
+
+    // --- Слоты и навигация ---
+
+    uint16_t Page::cell_offset(uint16_t index) const 
+    {
+        const uint8_t* ptr = data_.data() + sizeof(PageHeader) + index * sizeof(uint16_t);
+        uint16_t offset = 0;
+        std::memcpy(&offset, ptr, sizeof(uint16_t));
+        return offset;
+    }
+
+    void Page::set_cell_offset(uint16_t index, uint16_t offset) 
+    {
+        uint8_t* ptr = data_.data() + sizeof(PageHeader) + index * sizeof(uint16_t);
+        std::memcpy(ptr, &offset, sizeof(uint16_t));
+    }
+
+    std::string Page::get_key(uint16_t index) const 
+    {
+        uint16_t offset = cell_offset(index);
+        const uint8_t* ptr = data_.data() + offset;
+
+        uint16_t key_len = 0;
+        std::memcpy(&key_len, ptr, sizeof(uint16_t));
+        ptr += sizeof(uint16_t) + sizeof(uint16_t); // Пропускаем key_len и val_len
+
+        return std::string(reinterpret_cast<const char*>(ptr), key_len);
+    }
+
+    // --- Поиск и вставка ---
+
+    uint16_t Page::find_cell_index(const std::string& key) const 
+    {
+        uint16_t low = 0;
+        uint16_t high = header()->num_cells;
+
+        while (low < high) 
+        {
+            uint16_t mid = low + (high - low) / 2;
+            std::string mid_key = get_key(mid);
+
+            if (mid_key < key) 
+            {
+                low = mid + 1;
+            } 
+            else 
+            {
+                high = mid;
+            }
+        }
+
+        return low; // Возвращает точный индекс или позицию для отсортированной вставки
+    }
+
+    std::optional<std::string> Page::get(const std::string& key) const 
+    {
+        uint16_t idx = find_cell_index(key);
+        if (idx < header()->num_cells && get_key(idx) == key) 
+        {
+            auto record = get_record(idx);
+            if (record) 
+            {
+                return record->second;
+            }
+        }
+        return std::nullopt;
     }
 
     bool Page::insert_record(const std::string& key, const std::string& value) 
     {
         uint16_t key_len = static_cast<uint16_t>(key.size());
         uint16_t val_len = static_cast<uint16_t>(value.size());
-        size_t total_record_size = sizeof(uint16_t) + sizeof(uint16_t) + key_len + val_len;
+        size_t payload_size = sizeof(uint16_t) + sizeof(uint16_t) + key_len + val_len;
+        
+        PageHeader* h = header();
+        uint16_t idx = find_cell_index(key);
+        
+        // Проверяем, существует ли уже такой ключ на странице
+        bool is_update = (idx < h->num_cells && get_key(idx) == key);
 
-        if (free_space_left() < total_record_size) 
+        // Если это апдейт, нам не нужны 2 байта под новый слот
+        size_t needed_space = payload_size;
+        if (!is_update) 
+        {
+            needed_space += sizeof(uint16_t); 
+        }
+
+        if (free_space_left() < needed_space) 
         {
             return false; 
         }
 
-        PageHeader* h = header();
-        uint8_t* write_ptr = data_.data() + h->free_space_offset;
+        // Записываем пейлоад в нижнюю часть страницы
+        h->free_space_pointer -= static_cast<uint16_t>(payload_size);
+        uint8_t* write_ptr = data_.data() + h->free_space_pointer;
 
         std::memcpy(write_ptr, &key_len, sizeof(uint16_t));
         write_ptr += sizeof(uint16_t);
@@ -89,47 +167,51 @@ namespace minidb
         write_ptr += key_len;
 
         std::memcpy(write_ptr, value.data(), val_len);
-        write_ptr += val_len;
 
-        h->free_space_offset += static_cast<uint16_t>(total_record_size);
-        h->num_cells += 1;
+        if (is_update) 
+        {
+            // Обновляем существующий слот, чтобы он указывал на новые данные
+            set_cell_offset(idx, h->free_space_pointer);
+        } 
+        else 
+        {
+            // Сдвигаем 2-байтовые слоты вправо для сохранения сортировки
+            for (uint16_t i = h->num_cells; i > idx; --i) 
+            {
+                set_cell_offset(i, cell_offset(i - 1));
+            }
+
+            // Записываем смещение в нужную отсортированную позицию
+            set_cell_offset(idx, h->free_space_pointer);
+            h->num_cells += 1;
+        }
 
         return true;
     }
 
     std::optional<std::pair<std::string, std::string>> Page::get_record(uint16_t index) const 
     {
-        const PageHeader* h = header();
-        if (index >= h->num_cells) 
+        if (index >= header()->num_cells) 
         {
             return std::nullopt;
         }
 
-        // Read starting immediately after the new 18-byte header
-        const uint8_t* read_ptr = data_.data() + sizeof(PageHeader);
+        uint16_t offset = cell_offset(index);
+        const uint8_t* ptr = data_.data() + offset;
 
-        for (uint16_t i = 0; i < h->num_cells; ++i) 
-        {
-            uint16_t key_len = 0;
-            uint16_t val_len = 0;
+        uint16_t key_len = 0;
+        uint16_t val_len = 0;
 
-            std::memcpy(&key_len, read_ptr, sizeof(uint16_t));
-            read_ptr += sizeof(uint16_t);
+        std::memcpy(&key_len, ptr, sizeof(uint16_t));
+        ptr += sizeof(uint16_t);
 
-            std::memcpy(&val_len, read_ptr, sizeof(uint16_t));
-            read_ptr += sizeof(uint16_t);
+        std::memcpy(&val_len, ptr, sizeof(uint16_t));
+        ptr += sizeof(uint16_t);
 
-            if (i == index) 
-            {
-                std::string key(reinterpret_cast<const char*>(read_ptr), key_len);
-                std::string value(reinterpret_cast<const char*>(read_ptr + key_len), val_len);
-                return std::make_pair(key, value);
-            }
+        std::string key(reinterpret_cast<const char*>(ptr), key_len);
+        std::string value(reinterpret_cast<const char*>(ptr + key_len), val_len);
 
-            read_ptr += key_len + val_len;
-        }
-
-        return std::nullopt;
+        return std::make_pair(key, value);
     }
 
 } // namespace minidb
