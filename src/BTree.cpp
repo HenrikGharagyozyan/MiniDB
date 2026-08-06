@@ -4,7 +4,6 @@
 #include <algorithm>
 #include <cstring> // For std::memcpy
 
-
 namespace minidb 
 {
 
@@ -26,12 +25,9 @@ namespace minidb
             return current_page_id;
         }
 
-        // Navigation logic for internal nodes
-        [[maybe_unused]] uint16_t idx = page.find_cell_index(key);
-        
-        // In the future this will read child_page_id from the appropriate cell
-        // For now, while the tree is just a single root-leaf node, return the root
-        return current_page_id;
+        // Navigation logic for internal nodes: find the appropriate child and recurse
+        PageId child_id = page.find_internal_child(key);
+        return find_leaf_page(child_id, key);
     }
 
     std::optional<std::string> BTree::get(const std::string& key)
