@@ -49,6 +49,7 @@ TEST_F(BTreeTest, InsertAndGetSingleNode)
 TEST_F(BTreeTest, LeafNodeSplit) 
 {
     minidb::Pager pager(test_file);
+    pager.allocate_page(); // Skip Page 0 (simulate Meta Page)
     minidb::PageId root_id = pager.allocate_page();
 
     minidb::PageData raw_page{};

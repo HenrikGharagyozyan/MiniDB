@@ -2,6 +2,7 @@
 
 #include <vector>
 #include <algorithm>
+#include <cstring> // For std::memcpy
 
 
 namespace minidb 
@@ -157,6 +158,13 @@ namespace minidb
             pager_.write_page(new_root_id, new_root_raw);
 
             root_page_id_ = new_root_id;
+
+            // Update the Meta Page (Page 0) with the new root address
+            PageData meta_raw{};
+            pager_.read_page(0, meta_raw);
+            std::memcpy(meta_raw.data(), &root_page_id_, sizeof(PageId));
+            pager_.write_page(0, meta_raw);
+
             return;
         }
 

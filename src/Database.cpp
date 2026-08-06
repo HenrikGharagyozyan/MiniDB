@@ -1,6 +1,7 @@
 #include "minidb/Database.h"
 #include "minidb/Page.h"
 #include <utility>
+#include <cstring>
 
 
 namespace minidb 
@@ -19,18 +20,32 @@ namespace minidb
 
         PageId root_page_id = 0;
 
-        // If the file is new/empty, initialize the first page (root)
+        // If the file is new/empty, initialize the Meta Page and the first root page
         if (pager_->num_pages() == 0) 
         {
-            root_page_id = pager_->allocate_page();
-            PageData raw_page{};
-            Page page(raw_page);
-            // Используем новую сигнатуру init для корня
-            page.init(NodeType::LEAF, true);
-            pager_->write_page(root_page_id, raw_page);
+            PageId meta_page_id = pager_->allocate_page(); // This will be Page 0 (Meta Page)
+            root_page_id = pager_->allocate_page();        // This will be Page 1 (actual root)
+            
+            // Initialize the actual root (Page 1)
+            PageData root_raw{};
+            Page root_page(root_raw);
+            root_page.init(NodeType::LEAF, true);
+            pager_->write_page(root_page_id, root_raw);
+
+            // Write the root page ID into the Meta Page (Page 0)
+            PageData meta_raw{};
+            std::memcpy(meta_raw.data(), &root_page_id, sizeof(PageId));
+            pager_->write_page(meta_page_id, meta_raw);
+        }
+        else 
+        {
+            // The database already exists. Read the Meta Page (Page 0) to find the root
+            PageData meta_raw{};
+            pager_->read_page(0, meta_raw);
+            std::memcpy(&root_page_id, meta_raw.data(), sizeof(PageId));
         }
 
-        // Инициализируем B-дерево
+        // Initialize the B-tree with the correct root
         btree_ = std::make_unique<BTree>(*pager_, root_page_id);
 
         // --- Crash Recovery Stage ---
