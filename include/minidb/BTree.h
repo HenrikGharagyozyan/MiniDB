@@ -27,6 +27,8 @@ namespace minidb
 
         // Descend internal nodes to the correct leaf page
         PageId find_leaf_page(PageId current_page_id, const std::string& key);
+        void split_leaf(PageId leaf_id, const std::string& key, const std::string& value);
+        void insert_into_parent(PageId left_child_id, const std::string& key, PageId right_child_id);
     };
 
 } // namespace minidb
