@@ -285,4 +285,22 @@ namespace minidb
         return h->rightmost_child;
     }
 
+    std::pair<std::string, PageId> Page::get_internal_cell(uint16_t index) const 
+    {
+        uint16_t offset = cell_offset(index);
+        
+        // Читаем ID левого ребенка (4 байта)
+        PageId child_id = 0;
+        std::memcpy(&child_id, data_.data() + offset, sizeof(uint32_t));
+        
+        // Читаем длину ключа (2 байта)
+        uint16_t key_len = 0;
+        std::memcpy(&key_len, data_.data() + offset + sizeof(uint32_t), sizeof(uint16_t));
+        
+        // Читаем сам ключ
+        std::string key(reinterpret_cast<const char*>(data_.data() + offset + sizeof(uint32_t) + sizeof(uint16_t)), key_len);
+        
+        return {key, child_id};
+    }
+
 } // namespace minidb

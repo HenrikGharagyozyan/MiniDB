@@ -68,6 +68,8 @@ namespace minidb
         bool insert_internal_cell(const std::string& key, PageId left_child_id);
         PageId find_internal_child(const std::string& key) const;
 
+        std::pair<std::string, PageId> get_internal_cell(uint16_t index) const;
+
         // Helper methods
         uint16_t num_records() const;
         size_t free_space_left() const;
