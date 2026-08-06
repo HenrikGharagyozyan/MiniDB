@@ -50,10 +50,10 @@ namespace minidb
         uint32_t next_leaf_id() const;
         void set_next_leaf_id(uint32_t next_leaf_id);
 
-        // Бинарный поиск позиции ключа на странице
+        // Binary search for the key position on the page
         uint16_t find_cell_index(const std::string& key) const;
 
-        // Поиск значения по ключу за O(log K)
+        // Search for a value by key in O(log K)
         std::optional<std::string> get(const std::string& key) const;
 
         // Insert a key-value pair. Returns false if there is no room on the page
@@ -67,7 +67,7 @@ namespace minidb
         size_t free_space_left() const;
 
     private:
-        // Вспомогательные методы работы со слотами
+        // Helper methods for slot handling
         uint16_t cell_offset(uint16_t index) const;
         void set_cell_offset(uint16_t index, uint16_t offset);
         std::string get_key(uint16_t index) const;

@@ -92,7 +92,7 @@ namespace minidb
         if (pager_->num_pages() == 0) 
             return std::nullopt;
 
-        // Ищем с конца к началу по страницам (пока не построили дерево)
+        // Search pages from end to beginning (before the tree is built)
         for (int32_t page_id = pager_->num_pages() - 1; page_id >= 0; --page_id) 
         {
             PageData raw_page{};
@@ -100,15 +100,15 @@ namespace minidb
             
             Page page(raw_page);
             
-            // Используем наш новый быстрый бинарный поиск внутри страницы!
+            // Use our new fast binary search inside the page!
             auto val_opt = page.get(key);
             if (val_opt) 
             {
                 if (*val_opt == TOMBSTONE) 
                 {
-                    return std::nullopt; // Ключ был удален
+                    return std::nullopt; // Key was deleted
                 }
-                return *val_opt; // Нашли актуальное значение
+                return *val_opt; // Found the latest value
             }
         }
         

@@ -25,13 +25,13 @@ namespace minidb
         h->type = type;
         h->is_root = is_root ? 1 : 0;
         h->num_cells = 0;
-        h->free_space_pointer = PAGE_SIZE; // Свободное место для данных растет с самого конца (4096)
+        h->free_space_pointer = PAGE_SIZE; // Free space for records grows from the very end (4096)
         h->parent_page_id = INVALID_PAGE_ID;
         h->next_leaf_id = INVALID_PAGE_ID;
         h->rightmost_child = INVALID_PAGE_ID;
     }
 
-    // --- Метаданные ---
+    // --- Metadata ---
 
     NodeType Page::node_type() const { return header()->type; }
     bool Page::is_root() const { return header()->is_root != 0; }
@@ -51,7 +51,7 @@ namespace minidb
     size_t Page::free_space_left() const 
     {
         const PageHeader* h = header();
-        // Массив слотов заканчивается на: sizeof(PageHeader) + num_cells * 2
+        // The slot array ends at: sizeof(PageHeader) + num_cells * 2
         size_t slots_end = sizeof(PageHeader) + h->num_cells * sizeof(uint16_t);
         
         if (h->free_space_pointer <= slots_end) 
@@ -62,7 +62,7 @@ namespace minidb
         return h->free_space_pointer - slots_end;
     }
 
-    // --- Слоты и навигация ---
+    // --- Slots and navigation ---
 
     uint16_t Page::cell_offset(uint16_t index) const 
     {
@@ -85,12 +85,12 @@ namespace minidb
 
         uint16_t key_len = 0;
         std::memcpy(&key_len, ptr, sizeof(uint16_t));
-        ptr += sizeof(uint16_t) + sizeof(uint16_t); // Пропускаем key_len и val_len
+        ptr += sizeof(uint16_t) + sizeof(uint16_t); // Skip key_len and val_len
 
         return std::string(reinterpret_cast<const char*>(ptr), key_len);
     }
 
-    // --- Поиск и вставка ---
+    // --- Search and insert ---
 
     uint16_t Page::find_cell_index(const std::string& key) const 
     {
@@ -112,7 +112,7 @@ namespace minidb
             }
         }
 
-        return low; // Возвращает точный индекс или позицию для отсортированной вставки
+        return low; // Returns the exact index or the insertion position for sorted order
     }
 
     std::optional<std::string> Page::get(const std::string& key) const 
@@ -138,10 +138,10 @@ namespace minidb
         PageHeader* h = header();
         uint16_t idx = find_cell_index(key);
         
-        // Проверяем, существует ли уже такой ключ на странице
+        // Check whether the key already exists on the page
         bool is_update = (idx < h->num_cells && get_key(idx) == key);
 
-        // Если это апдейт, нам не нужны 2 байта под новый слот
+        // If this is an update, we do not need 2 bytes for a new slot
         size_t needed_space = payload_size;
         if (!is_update) 
         {
@@ -153,7 +153,7 @@ namespace minidb
             return false; 
         }
 
-        // Записываем пейлоад в нижнюю часть страницы
+        // Write the payload into the bottom part of the page
         h->free_space_pointer -= static_cast<uint16_t>(payload_size);
         uint8_t* write_ptr = data_.data() + h->free_space_pointer;
 
@@ -170,18 +170,18 @@ namespace minidb
 
         if (is_update) 
         {
-            // Обновляем существующий слот, чтобы он указывал на новые данные
+            // Update the existing slot to point to the new data
             set_cell_offset(idx, h->free_space_pointer);
         } 
         else 
         {
-            // Сдвигаем 2-байтовые слоты вправо для сохранения сортировки
+            // Shift 2-byte slots to the right to preserve sorted order
             for (uint16_t i = h->num_cells; i > idx; --i) 
             {
                 set_cell_offset(i, cell_offset(i - 1));
             }
 
-            // Записываем смещение в нужную отсортированную позицию
+            // Write the offset into the correct sorted position
             set_cell_offset(idx, h->free_space_pointer);
             h->num_cells += 1;
         }
