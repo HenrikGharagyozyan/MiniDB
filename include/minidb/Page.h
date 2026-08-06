@@ -50,6 +50,9 @@ namespace minidb
         uint32_t next_leaf_id() const;
         void set_next_leaf_id(uint32_t next_leaf_id);
 
+        uint32_t rightmost_child() const;
+        void set_rightmost_child(uint32_t child_id);
+
         // Binary search for the key position on the page
         uint16_t find_cell_index(const std::string& key) const;
 
@@ -58,9 +61,12 @@ namespace minidb
 
         // Insert a key-value pair. Returns false if there is no room on the page
         bool insert_record(const std::string& key, const std::string& value);
-
         // Get a record by its sequential index
         std::optional<std::pair<std::string, std::string>> get_record(uint16_t index) const;
+
+        // Internal nodes (Internal Nodes)
+        bool insert_internal_cell(const std::string& key, PageId left_child_id);
+        PageId find_internal_child(const std::string& key) const;
 
         // Helper methods
         uint16_t num_records() const;
