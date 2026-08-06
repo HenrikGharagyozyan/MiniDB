@@ -13,6 +13,7 @@ add_library(minidb_core
     src/Pager.cpp
     src/Page.cpp
     src/Wal.cpp
+    src/BTree.cpp
 )
 
 target_include_directories(minidb_core PUBLIC include)

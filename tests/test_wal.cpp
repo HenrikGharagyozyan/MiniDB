@@ -31,7 +31,7 @@ TEST_F(WalTest, WriteAndRecover)
         wal.append_set("user_id", "42");
         wal.append_delete("session_id");
         wal.flush();
-    } // WAL закрывается, симулируем падение базы до сброса страниц
+    } // WAL closes, simulating a crash before pages are flushed
 
     {
         minidb::Wal wal(log_file);
@@ -55,12 +55,12 @@ TEST_F(WalTest, ClearLog)
         minidb::Wal wal(log_file);
         wal.append_set("key", "value");
         wal.flush();
-        wal.clear(); // Симулируем успешный сброс страниц на диск
+        wal.clear(); // Simulate successful flush of pages to disk
     }
 
     {
         minidb::Wal wal(log_file);
         auto records = wal.recover();
-        EXPECT_TRUE(records.empty()); // Лог должен быть пустым
+        EXPECT_TRUE(records.empty()); // The log should be empty
     }
 }

@@ -2,6 +2,7 @@
 
 #include "minidb/Pager.h"
 #include "minidb/Wal.h"
+#include "minidb/BTree.h"
 
 #include <string>
 #include <optional>
@@ -15,6 +16,7 @@ namespace minidb
     {
     public:
         explicit Database(std::string filename);
+        ~Database() = default;
 
         void set(const std::string& key, const std::string& value);
         std::optional<std::string> get(const std::string& key);
@@ -24,9 +26,7 @@ namespace minidb
         std::string filename_;
         std::unique_ptr<Pager> pager_;
         std::unique_ptr<Wal> wal_;
-
-        // Вспомогательный метод для физической записи на страницу
-        void write_to_page(const std::string& key, const std::string& value);
+        std::unique_ptr<BTree> btree_;
     };
 
 } // namespace minidb

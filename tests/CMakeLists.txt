@@ -15,3 +15,7 @@ add_test(NAME DatabaseTest COMMAND test_database)
 add_executable(test_wal test_wal.cpp)
 target_link_libraries(test_wal PRIVATE minidb_core GTest::gtest_main)
 add_test(NAME WalTest COMMAND test_wal)
+
+add_executable(test_btree test_btree.cpp)
+target_link_libraries(test_btree PRIVATE minidb_core GTest::gtest_main)
+add_test(NAME BTreeTest COMMAND test_btree)
