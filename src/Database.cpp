@@ -92,7 +92,7 @@ namespace minidb
         if (pager_->num_pages() == 0) 
             return std::nullopt;
 
-        // Search from end to beginning (append-only: the latest record is the freshest)
+        // Ищем с конца к началу по страницам (пока не построили дерево)
         for (int32_t page_id = pager_->num_pages() - 1; page_id >= 0; --page_id) 
         {
             PageData raw_page{};
@@ -100,18 +100,15 @@ namespace minidb
             
             Page page(raw_page);
             
-            // Scan records on the page from the end as well
-            for (int32_t rec_idx = page.num_records() - 1; rec_idx >= 0; --rec_idx) 
+            // Используем наш новый быстрый бинарный поиск внутри страницы!
+            auto val_opt = page.get(key);
+            if (val_opt) 
             {
-                auto rec = page.get_record(static_cast<uint16_t>(rec_idx));
-                if (rec && rec->first == key) 
+                if (*val_opt == TOMBSTONE) 
                 {
-                    if (rec->second == TOMBSTONE) 
-                    {
-                        return std::nullopt; // Key was deleted
-                    }
-                    return rec->second; // Found the latest value!
+                    return std::nullopt; // Ключ был удален
                 }
+                return *val_opt; // Нашли актуальное значение
             }
         }
         
