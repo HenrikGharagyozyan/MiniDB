@@ -289,15 +289,15 @@ namespace minidb
     {
         uint16_t offset = cell_offset(index);
         
-        // Читаем ID левого ребенка (4 байта)
+        // Read the left child ID (4 bytes)
         PageId child_id = 0;
         std::memcpy(&child_id, data_.data() + offset, sizeof(uint32_t));
         
-        // Читаем длину ключа (2 байта)
+        // Read the key length (2 bytes)
         uint16_t key_len = 0;
         std::memcpy(&key_len, data_.data() + offset + sizeof(uint32_t), sizeof(uint16_t));
         
-        // Читаем сам ключ
+        // Read the key itself
         std::string key(reinterpret_cast<const char*>(data_.data() + offset + sizeof(uint32_t) + sizeof(uint16_t)), key_len);
         
         return {key, child_id};
