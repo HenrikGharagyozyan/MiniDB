@@ -23,3 +23,7 @@ add_test(NAME BTreeTest COMMAND test_btree)
 add_executable(test_lru_replacer test_lru_replacer.cpp)
 target_link_libraries(test_lru_replacer PRIVATE minidb_core GTest::gtest_main)
 add_test(NAME LRUReplacerTest COMMAND test_lru_replacer)
+
+add_executable(test_buffer_pool_manager test_buffer_pool_manager.cpp)
+target_link_libraries(test_buffer_pool_manager PRIVATE minidb_core gtest_main)
+add_test(NAME BufferPoolManagerTest COMMAND test_buffer_pool_manager)

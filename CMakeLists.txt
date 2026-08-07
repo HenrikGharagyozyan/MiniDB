@@ -15,6 +15,7 @@ add_library(minidb_core
     src/Wal.cpp
     src/BTree.cpp
     src/LRUReplacer.cpp
+    src/BufferPoolManager.cpp
 )
 
 target_include_directories(minidb_core PUBLIC include)
