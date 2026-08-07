@@ -2,6 +2,7 @@
 
 namespace minidb 
 {
+
     LRUReplacer::LRUReplacer(size_t num_frames)
         : capacity_(num_frames)
     {
@@ -11,16 +12,16 @@ namespace minidb
     {
         std::lock_guard<std::mutex> lock(mutex_);
         
-        // Если вытеснять нечего, возвращаем false
+        // If there is nothing to evict, return false
         if (lru_list_.empty()) 
         {
             return false;
         }
 
-        // Самый старый фрейм всегда "падает" в конец списка
+        // The oldest frame is always at the back of the list
         *frame_id = lru_list_.back();
         
-        // Удаляем его из хэш-таблицы и из списка
+        // Remove it from the hash table and from the list
         lru_hash_.erase(*frame_id);
         lru_list_.pop_back();
         
@@ -34,8 +35,8 @@ namespace minidb
         auto it = lru_hash_.find(frame_id);
         if (it != lru_hash_.end()) 
         {
-            // Кто-то начал использовать этот фрейм! 
-            // Он больше не кандидат на вытеснение, поэтому убираем его.
+            // Someone started using this frame!
+            // It is no longer a candidate for eviction, so remove it.
             lru_list_.erase(it->second);
             lru_hash_.erase(it);
         }
@@ -45,22 +46,22 @@ namespace minidb
     {
         std::lock_guard<std::mutex> lock(mutex_);
         
-        // Если фрейм уже в списке кандидатов, ничего не делаем
+        // If the frame is already in the candidate list, do nothing
         if (lru_hash_.find(frame_id) != lru_hash_.end()) 
         {
             return;
         }
 
-        // Защита от переполнения (хотя BufferPoolManager сам следит за лимитом)
+        // Protection against overflow (although BufferPoolManager keeps the limit)
         if (lru_list_.size() >= capacity_) 
         {
             return; 
         }
 
-        // Добавляем фрейм в начало списка (он самый свежий из ненужных)
+        // Add the frame to the front of the list (it is the newest unneeded one)
         lru_list_.push_front(frame_id);
         
-        // Сохраняем итератор в хэш-таблицу для быстрого доступа
+        // Store the iterator in the hash table for fast access
         lru_hash_[frame_id] = lru_list_.begin();
     }
 

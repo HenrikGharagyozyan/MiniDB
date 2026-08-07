@@ -4,44 +4,44 @@
 #include <unordered_map>
 #include <mutex>
 
+
 namespace minidb 
 {
-    // FrameId - это "номер слота" в нашей оперативной памяти
+
+    // FrameId is the "slot number" in our memory pool
     using FrameId = int32_t;
 
     class LRUReplacer 
     {
     public:
-        // Создаем LRU кэш с заданным лимитом слотов
+        // Create an LRU cache with the given slot limit
         explicit LRUReplacer(size_t num_frames);
         ~LRUReplacer() = default;
 
-        // Выбрать "жертву" (victim) — самый старый фрейм для вытеснения.
-        // Запишет ID фрейма в указатель и вернет true. Если вытеснять нечего, вернет false.
+        // Select a victim — the oldest frame to evict.
+        // Writes the frame ID to the pointer and returns true. Returns false if there is nothing to evict.
         bool victim(FrameId* frame_id);
 
-        // Закрепить (pin) фрейм. Это значит, что какая-то часть базы прямо сейчас 
-        // читает этот фрейм, и его КАТЕГОРИЧЕСКИ нельзя вытеснять из памяти.
+        // Pin a frame. This means some part of the database is currently reading it, and it must not be evicted.
         void pin(FrameId frame_id);
 
-        // Открепить (unpin) фрейм. База закончила работу с ним, теперь его 
-        // можно вытеснять, если понадобится место.
+        // Unpin a frame. The database is done with it, so it can be evicted if needed.
         void unpin(FrameId frame_id);
 
-        // Сколько сейчас фреймов можно вытеснить?
+        // How many frames are currently evictable?
         size_t size();
 
     private:
-        // Двусвязный список хранит порядок. В начале - самые новые, в конце - самые старые.
+        // Doubly linked list maintains the order. Newest frames at the front, oldest at the back.
         std::list<FrameId> lru_list_;
         
-        // Хэш-таблица для быстрого поиска фрейма в списке за О(1) времени
+        // Hash table for O(1) lookup of a frame in the list
         std::unordered_map<FrameId, std::list<FrameId>::iterator> lru_hash_;
         
-        // Лимит фреймов
+        // Frame limit
         size_t capacity_;
         
-        // (Stage 8), чтобы разные потоки не сломали кэш
+        // (Stage 8), to prevent different threads from breaking the cache
         std::mutex mutex_;
     };
 
