@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cstdint>
+#include <vector>
+#include <memory>
 
 
 namespace minidb 
@@ -14,6 +16,9 @@ namespace minidb
         COMMITTED,
         ABORTED
     };
+
+
+    class LogRecord;
 
 
     class Transaction 
@@ -30,10 +35,15 @@ namespace minidb
         TransactionState get_state() const { return state_; }
         void set_state(TransactionState state) { state_ = state; }
 
+        void add_log_record(std::shared_ptr<LogRecord> record) { undo_logs_.push_back(record); }
+        const std::vector<std::shared_ptr<LogRecord>>& get_undo_logs() const { return undo_logs_; }
+
     private:
         txn_id_t txn_id_;
         TransactionState state_;
-        
+
+        // Vector storing all changes made by this transaction
+        std::vector<std::shared_ptr<LogRecord>> undo_logs_;
     };
 
 } // namespace minidb
