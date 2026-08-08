@@ -9,6 +9,8 @@
 namespace minidb 
 {
 
+    class Database;
+
     class TransactionManager 
     {
     public:
@@ -22,7 +24,7 @@ namespace minidb
         void commit(Transaction* txn);
 
         // Abort (cancel)
-        void abort(Transaction* txn);
+        void abort(Transaction* txn, Database* db);
 
     private:
         // Counter for issuing unique IDs

@@ -81,7 +81,7 @@ namespace minidb
 
     void Database::set(const std::string& key, const std::string& value, Transaction* txn)
     {
-        // Записываем Undo Log перед изменением
+        // Write the undo log before making the change
         if (txn != nullptr) 
         {
             auto old_value = get(key);
@@ -124,13 +124,13 @@ namespace minidb
 
     void Database::remove(const std::string& key, Transaction* txn) 
     {
-        // Записываем Undo Log перед удалением
+        // Write the undo log before deletion
         if (txn != nullptr) 
         {
             auto old_value = get(key);
             if (old_value) 
             {
-                // Запоминаем удаляемое значение, чтобы при ROLLBACK вернуть его
+                // Record the deleted value so rollback can restore it
                 txn->add_log_record(std::make_shared<LogRecord>(
                     txn->get_transaction_id(), UndoLogType::DELETE, key, *old_value));
             }
