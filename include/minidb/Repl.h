@@ -1,7 +1,11 @@
 #pragma once
 
 #include "minidb/Database.h"
+#include "minidb/TransactionManager.h"
+
 #include <string>
+#include <memory>
+
 
 namespace minidb 
 {
@@ -18,6 +22,9 @@ namespace minidb
     private:
         Database& db_;
         
+        TransactionManager txn_manager_;
+        std::shared_ptr<Transaction> current_txn_;
+
         // Handler for a single input line
         bool executeCommand(const std::string& line);
     };
