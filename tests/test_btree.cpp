@@ -30,7 +30,7 @@ protected:
 TEST_F(BTreeTest, InsertAndGetSingleNode) 
 {
     minidb::Pager pager(test_file);
-    // Создаем пул буферов для тестов
+    // Create a buffer pool for tests
     minidb::BufferPoolManager bpm(10, pager);
 
     minidb::PageId root_id;
@@ -38,10 +38,10 @@ TEST_F(BTreeTest, InsertAndGetSingleNode)
 
     minidb::Page root_page(*raw_page);
     root_page.init(minidb::NodeType::LEAF, true);
-    // Открепляем и помечаем как грязную, так как мы ее инициализировали
+    // Unpin and mark it dirty because we initialized it
     bpm.unpin_page(root_id, true); 
 
-    // Передаем BPM вместо Pager
+    // Pass BPM instead of Pager
     minidb::BTree btree(bpm, root_id);
 
     btree.insert("alpha", "100");
@@ -58,7 +58,7 @@ TEST_F(BTreeTest, LeafNodeSplit)
     minidb::BufferPoolManager bpm(10, pager);
 
     minidb::PageId meta_id;
-    bpm.new_page(&meta_id); // Пропускаем Page 0 (симулируем Meta Page)
+    bpm.new_page(&meta_id); // Skip Page 0 (simulate the Meta Page)
     bpm.unpin_page(meta_id, false); 
 
     minidb::PageId root_id;
