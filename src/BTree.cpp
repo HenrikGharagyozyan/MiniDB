@@ -27,7 +27,7 @@ namespace minidb
 
         PageId child_id = page.find_internal_child(key);
 
-        // Открепляем текущую ноду ПЕРЕД тем, как идти глубже!
+        // Unpin the current node BEFORE descending!
         bpm_.unpin_page(current_page_id, false); 
         
         return find_leaf_page(child_id, key);
@@ -56,11 +56,11 @@ namespace minidb
         bool success = leaf_page.insert_record(key, value);
         if (success) 
         {
-            bpm_.unpin_page(leaf_id, true); // Записали - значит dirty
+            bpm_.unpin_page(leaf_id, true); // We wrote it, so it's dirty
             return;
         }
 
-        // Если места нет, открепляем (мы пока не изменили страницу) и вызываем split
+        // If there is no space, unpin it (we haven't modified the page yet) and call split
         bpm_.unpin_page(leaf_id, false);
         split_leaf(leaf_id, key, value);
     }
@@ -117,7 +117,7 @@ namespace minidb
         old_leaf.set_next_leaf_id(new_leaf_id);
         new_leaf.set_next_leaf_id(old_next);
 
-        // Обе страницы изменились
+        // Both pages have changed
         bpm_.unpin_page(leaf_id, true);
         bpm_.unpin_page(new_leaf_id, true);
 
@@ -167,7 +167,7 @@ namespace minidb
         // If the node was not root, insert into the existing parent node
         PageId parent_id = left_child.parent_id();
         
-        // Открепляем левого потомка, так как в ветке else (не корень) мы его не меняли
+        // Unpin the left child because in the else branch (not root) we did not modify it
         bpm_.unpin_page(left_child_id, false);
 
         PageData* parent_raw = bpm_.fetch_page(parent_id);

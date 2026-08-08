@@ -16,6 +16,7 @@ add_library(minidb_core
     src/BTree.cpp
     src/LRUReplacer.cpp
     src/BufferPoolManager.cpp
+    src/TransactionManager.cpp
 )
 
 target_include_directories(minidb_core PUBLIC include)

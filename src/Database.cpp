@@ -16,7 +16,7 @@ namespace minidb
     {
         pager_ = std::make_unique<Pager>(filename_);
 
-        // Создаем пул на 10 страниц в памяти
+        // Create a 10-page pool in memory
         bpm_ = std::make_unique<BufferPoolManager>(10, *pager_);
 
         // The WAL file is named after the database plus ".log"
@@ -28,7 +28,7 @@ namespace minidb
         if (pager_->num_pages() == 0) 
         {
             PageId meta_page_id;
-            // allocate_page() спрятан внутри new_page()
+            // allocate_page() is hidden inside new_page()
             PageData* meta_raw = bpm_->new_page(&meta_page_id); 
             
             PageData* root_raw = bpm_->new_page(&root_page_id); 
@@ -36,21 +36,21 @@ namespace minidb
             Page root_page(*root_raw);
             root_page.init(NodeType::LEAF, true);
             
-            // Записываем ID корня в нулевую страницу
+            // Write the root ID into page zero
             std::memcpy(meta_raw->data(), &root_page_id, sizeof(PageId));
 
-            // Открепляем страницы (is_dirty = true, так как мы их изменили)
+            // Unpin the pages (is_dirty = true because we modified them)
             bpm_->unpin_page(root_page_id, true);
             bpm_->unpin_page(meta_page_id, true);
         }
         else 
         {
             // The database already exists. Read the Meta Page (Page 0) to find the root
-            // Читаем мета-страницу через BPM
+            // Read the meta page through the BPM
             PageData* meta_raw = bpm_->fetch_page(0);
             std::memcpy(&root_page_id, meta_raw->data(), sizeof(PageId));
             
-            // Только читали, изменений нет
+            // Only read, no changes were made
             bpm_->unpin_page(0, false);
         }
 
