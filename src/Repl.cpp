@@ -6,19 +6,28 @@ namespace minidb
 {
 
     Repl::Repl(Database& db) 
-        : db_(db) 
+        : db_(db), current_txn_(nullptr)
     {
     }
 
     void Repl::run() 
     {
-        std::cout << "MiniDB v0.2.0 (REPL)\n";
-        std::cout << "Commands: SET  , GET , DELETE , EXIT\n";
+        std::cout << "MiniDB v0.2.0 (REPL with Transactions)\n";
+        std::cout << "Commands: SET <k> <v>, GET <k>, DELETE <k>, BEGIN, COMMIT, ROLLBACK, EXIT\n";
 
         std::string line;
         while (true) 
         {
-            std::cout << "db> ";
+            // Change the prompt when we are inside a transaction
+            if (current_txn_) 
+            {
+                std::cout << "db (txn:" << current_txn_->get_transaction_id() << ")> ";
+            } 
+            else 
+            {
+                std::cout << "db> ";
+            }
+
             if (!std::getline(std::cin, line)) 
             {
                 break;
@@ -37,6 +46,9 @@ namespace minidb
         std::string command;
         iss >> command;
 
+        for (auto& c : command) 
+            c = toupper(c);
+
         if (command.empty()) 
         {
             return true;
@@ -47,6 +59,44 @@ namespace minidb
             std::cout << "Bye!\n";
             return false; // Signal to terminate the REPL
         } 
+        else if (command == "BEGIN") 
+        {
+            if (current_txn_) 
+            {
+                std::cout << "Error: Transaction already active.\n";
+            } 
+            else 
+            {
+                current_txn_ = txn_manager_.begin();
+                std::cout << "Transaction " << current_txn_->get_transaction_id() << " started.\n";
+            }
+        }
+        else if (command == "COMMIT") 
+        {
+            if (!current_txn_) 
+            {
+                std::cout << "Error: No active transaction.\n";
+            } 
+            else 
+            {
+                txn_manager_.commit(current_txn_.get());
+                std::cout << "Transaction committed.\n";
+                current_txn_ = nullptr;
+            }
+        }
+        else if (command == "ROLLBACK") 
+        {
+            if (!current_txn_) 
+            {
+                std::cout << "Error: No active transaction.\n";
+            } 
+            else 
+            {
+                txn_manager_.abort(current_txn_.get(), &db_);
+                std::cout << "Transaction rolled back.\n";
+                current_txn_ = nullptr;
+            }
+        }
         else if (command == "SET") 
         {
             std::string key, value;
@@ -55,11 +105,12 @@ namespace minidb
             
             if (key.empty() || value.empty()) 
             {
-                std::cout << "Error: Usage: SET  \n";
+                std::cout << "Error: Usage: SET <k> <v>\n";
             } 
             else 
             {
-                db_.set(key, value);
+                // Pass the current transaction
+                db_.set(key, value, current_txn_.get());
                 std::cout << "OK\n";
             }
         } 
@@ -70,7 +121,7 @@ namespace minidb
             
             if (key.empty()) 
             {
-                std::cout << "Error: Usage: GET \n";
+                std::cout << "Error: Usage: GET <k>\n";
             } 
             else 
             {
@@ -92,11 +143,12 @@ namespace minidb
             
             if (key.empty()) 
             {
-                std::cout << "Error: Usage: DELETE \n";
+                std::cout << "Error: Usage: DELETE <k>\n";
             } 
             else 
             {
-                db_.remove(key);
+                // Pass the current transaction
+                db_.remove(key, current_txn_.get());
                 std::cout << "OK\n";
             }
         } 
