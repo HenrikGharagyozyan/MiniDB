@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include "minidb/BTree.h"
 #include "minidb/Pager.h"
+#include "minidb/BufferPoolManager.h"
 #include <filesystem>
 #include <string>
 
@@ -29,14 +30,19 @@ protected:
 TEST_F(BTreeTest, InsertAndGetSingleNode) 
 {
     minidb::Pager pager(test_file);
-    minidb::PageId root_id = pager.allocate_page();
+    // Создаем пул буферов для тестов
+    minidb::BufferPoolManager bpm(10, pager);
 
-    minidb::PageData raw_page{};
-    minidb::Page root_page(raw_page);
+    minidb::PageId root_id;
+    minidb::PageData* raw_page = bpm.new_page(&root_id);
+
+    minidb::Page root_page(*raw_page);
     root_page.init(minidb::NodeType::LEAF, true);
-    pager.write_page(root_id, raw_page);
+    // Открепляем и помечаем как грязную, так как мы ее инициализировали
+    bpm.unpin_page(root_id, true); 
 
-    minidb::BTree btree(pager, root_id);
+    // Передаем BPM вместо Pager
+    minidb::BTree btree(bpm, root_id);
 
     btree.insert("alpha", "100");
     btree.insert("beta", "200");
@@ -49,15 +55,20 @@ TEST_F(BTreeTest, InsertAndGetSingleNode)
 TEST_F(BTreeTest, LeafNodeSplit) 
 {
     minidb::Pager pager(test_file);
-    pager.allocate_page(); // Skip Page 0 (simulate Meta Page)
-    minidb::PageId root_id = pager.allocate_page();
+    minidb::BufferPoolManager bpm(10, pager);
 
-    minidb::PageData raw_page{};
-    minidb::Page root_page(raw_page);
+    minidb::PageId meta_id;
+    bpm.new_page(&meta_id); // Пропускаем Page 0 (симулируем Meta Page)
+    bpm.unpin_page(meta_id, false); 
+
+    minidb::PageId root_id;
+    minidb::PageData* raw_page = bpm.new_page(&root_id);
+
+    minidb::Page root_page(*raw_page);
     root_page.init(minidb::NodeType::LEAF, true);
-    pager.write_page(root_id, raw_page);
+    bpm.unpin_page(root_id, true);
 
-    minidb::BTree btree(pager, root_id);
+    minidb::BTree btree(bpm, root_id);
 
     // Insert enough long keys/values to force a split
     for (int i = 0; i < 100; ++i) 

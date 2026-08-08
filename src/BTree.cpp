@@ -7,26 +7,29 @@
 namespace minidb 
 {
 
-    BTree::BTree(Pager& pager, PageId root_page_id)
-        : pager_(pager)
+    BTree::BTree(BufferPoolManager& bpm, PageId root_page_id)
+        : bpm_(bpm)
         , root_page_id_(root_page_id)
     {
     }
 
     PageId BTree::find_leaf_page(PageId current_page_id, const std::string& key)
     {
-        PageData raw_page{};
-        pager_.read_page(current_page_id, raw_page);
-        Page page(raw_page);
+        PageData* raw_page = bpm_.fetch_page(current_page_id);
+        Page page(*raw_page);
 
         // If we've reached a leaf, return its ID
         if (page.node_type() == NodeType::LEAF) 
         {
+            bpm_.unpin_page(current_page_id, false);
             return current_page_id;
         }
 
-        // Navigation logic for internal nodes: find the appropriate child and recurse
         PageId child_id = page.find_internal_child(key);
+
+        // Открепляем текущую ноду ПЕРЕД тем, как идти глубже!
+        bpm_.unpin_page(current_page_id, false); 
+        
         return find_leaf_page(child_id, key);
     }
 
@@ -34,38 +37,38 @@ namespace minidb
     {
         PageId leaf_id = find_leaf_page(root_page_id_, key);
         
-        PageData raw_page{};
-        pager_.read_page(leaf_id, raw_page);
-        Page leaf_page(raw_page);
+        PageData* raw_page = bpm_.fetch_page(leaf_id);
+        Page leaf_page(*raw_page);
 
-        return leaf_page.get(key);
+        auto result = leaf_page.get(key);
+        bpm_.unpin_page(leaf_id, false);
+        return result;
     }
 
     void BTree::insert(const std::string& key, const std::string& value)
     {
         PageId leaf_id = find_leaf_page(root_page_id_, key);
 
-        PageData raw_page{};
-        pager_.read_page(leaf_id, raw_page);
-        Page leaf_page(raw_page);
+        PageData* raw_page = bpm_.fetch_page(leaf_id);
+        Page leaf_page(*raw_page);
 
         // Try inserting into the leaf
         bool success = leaf_page.insert_record(key, value);
         if (success) 
         {
-            pager_.write_page(leaf_id, raw_page);
+            bpm_.unpin_page(leaf_id, true); // Записали - значит dirty
             return;
         }
 
-        // If there is no room, split the leaf
+        // Если места нет, открепляем (мы пока не изменили страницу) и вызываем split
+        bpm_.unpin_page(leaf_id, false);
         split_leaf(leaf_id, key, value);
     }
 
     void BTree::split_leaf(PageId leaf_id, const std::string& new_key, const std::string& new_value)
     {
-        PageData old_raw_page{};
-        pager_.read_page(leaf_id, old_raw_page);
-        Page old_leaf(old_raw_page);
+        PageData* old_raw_page = bpm_.fetch_page(leaf_id);
+        Page old_leaf(*old_raw_page);
 
         // 1. Collect all existing records plus the new record
         std::vector<std::pair<std::string, std::string>> records;
@@ -84,15 +87,14 @@ namespace minidb
         });
 
         // 2. Allocate a new page for the right leaf
-        PageId new_leaf_id = pager_.allocate_page();
-        PageData new_raw_page{};
-        Page new_leaf(new_raw_page);
+        PageId new_leaf_id;
+        PageData* new_raw_page = bpm_.new_page(&new_leaf_id);
+        Page new_leaf(*new_raw_page);
 
         bool was_root = old_leaf.is_root();
         uint32_t parent_id = old_leaf.parent_id();
         uint32_t old_next = old_leaf.next_leaf_id();
 
-        // 3. Clear the pages and distribute records evenly
         old_leaf.init(NodeType::LEAF, was_root);
         old_leaf.set_parent_id(parent_id);
 
@@ -115,8 +117,9 @@ namespace minidb
         old_leaf.set_next_leaf_id(new_leaf_id);
         new_leaf.set_next_leaf_id(old_next);
 
-        pager_.write_page(leaf_id, old_raw_page);
-        pager_.write_page(new_leaf_id, new_raw_page);
+        // Обе страницы изменились
+        bpm_.unpin_page(leaf_id, true);
+        bpm_.unpin_page(new_leaf_id, true);
 
         // 5. Separator is the first key of the right leaf
         std::string separator_key = records[mid].first;
@@ -126,16 +129,15 @@ namespace minidb
 
     void BTree::insert_into_parent(PageId left_child_id, const std::string& key, PageId right_child_id)
     {
-        PageData left_raw_page{};
-        pager_.read_page(left_child_id, left_raw_page);
-        Page left_child(left_raw_page);
+        PageData* left_raw_page = bpm_.fetch_page(left_child_id);
+        Page left_child(*left_raw_page);
 
         // If the root split, create a new internal node as the root
         if (left_child.is_root()) 
         {
-            PageId new_root_id = pager_.allocate_page();
-            PageData new_root_raw{};
-            Page new_root(new_root_raw);
+            PageId new_root_id;
+            PageData* new_root_raw = bpm_.new_page(&new_root_id);
+            Page new_root(*new_root_raw);
 
             new_root.init(NodeType::INTERNAL, true);
             new_root.insert_internal_cell(key, left_child_id);
@@ -144,31 +146,32 @@ namespace minidb
             left_child.set_root(false);
             left_child.set_parent_id(new_root_id);
 
-            PageData right_raw{};
-            pager_.read_page(right_child_id, right_raw);
-            Page right_child(right_raw);
+            PageData* right_raw = bpm_.fetch_page(right_child_id);
+            Page right_child(*right_raw);
             right_child.set_parent_id(new_root_id);
 
-            pager_.write_page(left_child_id, left_raw_page);
-            pager_.write_page(right_child_id, right_raw);
-            pager_.write_page(new_root_id, new_root_raw);
+            bpm_.unpin_page(right_child_id, true);
+            bpm_.unpin_page(left_child_id, true);
+            bpm_.unpin_page(new_root_id, true);
 
             root_page_id_ = new_root_id;
 
             // Update the Meta Page (Page 0) with the new root address
-            PageData meta_raw{};
-            pager_.read_page(0, meta_raw);
-            std::memcpy(meta_raw.data(), &root_page_id_, sizeof(PageId));
-            pager_.write_page(0, meta_raw);
+            PageData* meta_raw = bpm_.fetch_page(0);
+            std::memcpy(meta_raw->data(), &root_page_id_, sizeof(PageId));
+            bpm_.unpin_page(0, true);
 
             return;
         }
 
         // If the node was not root, insert into the existing parent node
         PageId parent_id = left_child.parent_id();
-        PageData parent_raw{};
-        pager_.read_page(parent_id, parent_raw);
-        Page parent(parent_raw);
+        
+        // Открепляем левого потомка, так как в ветке else (не корень) мы его не меняли
+        bpm_.unpin_page(left_child_id, false);
+
+        PageData* parent_raw = bpm_.fetch_page(parent_id);
+        Page parent(*parent_raw);
 
         if (parent.rightmost_child() == left_child_id) 
         {
@@ -180,7 +183,7 @@ namespace minidb
             parent.insert_internal_cell(key, left_child_id);
         }
 
-        pager_.write_page(parent_id, parent_raw);
+        bpm_.unpin_page(parent_id, true);
     }
 
 } // namespace minidb

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "minidb/Pager.h"
+#include "minidb/BufferPoolManager.h"
 #include "minidb/Wal.h"
 #include "minidb/BTree.h"
 
@@ -24,7 +25,9 @@ namespace minidb
 
     private:
         std::string filename_;
+       
         std::unique_ptr<Pager> pager_;
+        std::unique_ptr<BufferPoolManager> bpm_;
         std::unique_ptr<Wal> wal_;
         std::unique_ptr<BTree> btree_;
     };

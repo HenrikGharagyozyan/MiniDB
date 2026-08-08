@@ -15,6 +15,10 @@ namespace minidb
         : filename_(std::move(filename)) 
     {
         pager_ = std::make_unique<Pager>(filename_);
+
+        // Создаем пул на 10 страниц в памяти
+        bpm_ = std::make_unique<BufferPoolManager>(10, *pager_);
+
         // The WAL file is named after the database plus ".log"
         wal_ = std::make_unique<Wal>(filename_ + ".log");
 
@@ -23,30 +27,35 @@ namespace minidb
         // If the file is new/empty, initialize the Meta Page and the first root page
         if (pager_->num_pages() == 0) 
         {
-            PageId meta_page_id = pager_->allocate_page(); // This will be Page 0 (Meta Page)
-            root_page_id = pager_->allocate_page();        // This will be Page 1 (actual root)
+            PageId meta_page_id;
+            // allocate_page() спрятан внутри new_page()
+            PageData* meta_raw = bpm_->new_page(&meta_page_id); 
             
-            // Initialize the actual root (Page 1)
-            PageData root_raw{};
-            Page root_page(root_raw);
+            PageData* root_raw = bpm_->new_page(&root_page_id); 
+            
+            Page root_page(*root_raw);
             root_page.init(NodeType::LEAF, true);
-            pager_->write_page(root_page_id, root_raw);
+            
+            // Записываем ID корня в нулевую страницу
+            std::memcpy(meta_raw->data(), &root_page_id, sizeof(PageId));
 
-            // Write the root page ID into the Meta Page (Page 0)
-            PageData meta_raw{};
-            std::memcpy(meta_raw.data(), &root_page_id, sizeof(PageId));
-            pager_->write_page(meta_page_id, meta_raw);
+            // Открепляем страницы (is_dirty = true, так как мы их изменили)
+            bpm_->unpin_page(root_page_id, true);
+            bpm_->unpin_page(meta_page_id, true);
         }
         else 
         {
             // The database already exists. Read the Meta Page (Page 0) to find the root
-            PageData meta_raw{};
-            pager_->read_page(0, meta_raw);
-            std::memcpy(&root_page_id, meta_raw.data(), sizeof(PageId));
+            // Читаем мета-страницу через BPM
+            PageData* meta_raw = bpm_->fetch_page(0);
+            std::memcpy(&root_page_id, meta_raw->data(), sizeof(PageId));
+            
+            // Только читали, изменений нет
+            bpm_->unpin_page(0, false);
         }
 
         // Initialize the B-tree with the correct root
-        btree_ = std::make_unique<BTree>(*pager_, root_page_id);
+        btree_ = std::make_unique<BTree>(*bpm_, root_page_id);
 
         // --- Crash Recovery Stage ---
         auto uncommitted_records = wal_->recover();
