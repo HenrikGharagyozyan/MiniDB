@@ -1,5 +1,7 @@
 #include "minidb/Database.h"
 #include "minidb/Page.h"
+#include "minidb/LogRecord.h"
+
 #include <utility>
 #include <cstring>
 
@@ -77,8 +79,24 @@ namespace minidb
         }
     }
 
-    void Database::set(const std::string& key, const std::string& value)
+    void Database::set(const std::string& key, const std::string& value, Transaction* txn)
     {
+        // Write the undo log before making the change
+        if (txn != nullptr) 
+        {
+            auto old_value = get(key);
+            if (old_value)  
+            {
+                txn->add_log_record(std::make_shared<LogRecord>(
+                    txn->get_transaction_id(), UndoLogType::UPDATE, key, *old_value));
+            } 
+            else 
+            {
+                txn->add_log_record(std::make_shared<LogRecord>(
+                    txn->get_transaction_id(), UndoLogType::INSERT, key));
+            }
+        }
+
         // First write strictly to the WAL and flush to disk
         wal_->append_set(key, value);
         wal_->flush();
@@ -104,8 +122,20 @@ namespace minidb
         return std::nullopt;
     }
 
-    void Database::remove(const std::string& key) 
+    void Database::remove(const std::string& key, Transaction* txn) 
     {
+        // Write the undo log before deletion
+        if (txn != nullptr) 
+        {
+            auto old_value = get(key);
+            if (old_value) 
+            {
+                // Record the deleted value so rollback can restore it
+                txn->add_log_record(std::make_shared<LogRecord>(
+                    txn->get_transaction_id(), UndoLogType::DELETE, key, *old_value));
+            }
+        }
+
         // Write deletion to the WAL
         wal_->append_delete(key);
         wal_->flush();

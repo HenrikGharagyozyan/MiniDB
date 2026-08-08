@@ -4,6 +4,7 @@
 #include "minidb/BufferPoolManager.h"
 #include "minidb/Wal.h"
 #include "minidb/BTree.h"
+#include "minidb/Transaction.h"
 
 #include <string>
 #include <optional>
@@ -19,9 +20,9 @@ namespace minidb
         explicit Database(std::string filename);
         ~Database() = default;
 
-        void set(const std::string& key, const std::string& value);
+        void set(const std::string& key, const std::string& value, Transaction* txn = nullptr);
         std::optional<std::string> get(const std::string& key);
-        void remove(const std::string& key);
+        void remove(const std::string& key, Transaction* txn = nullptr);
 
     private:
         std::string filename_;
