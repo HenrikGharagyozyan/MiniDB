@@ -81,10 +81,27 @@ namespace minidb
 
     void Database::set(const std::string& key, const std::string& value, Transaction* txn)
     {
-        // Write the undo log before making the change
+        // 2PL: Acquire Exclusive lock (X-Lock)
+        if (txn != nullptr && lock_mgr_ != nullptr) 
+        {
+            if (!txn->holds_exclusive_lock(key)) 
+            {
+                // Lock Upgrade: if we already read this key, release S-Lock before acquiring X-Lock
+                if (txn->holds_shared_lock(key)) 
+                {
+                    lock_mgr_->unlock_shared(key);
+                    txn->remove_shared_lock(key);
+                }
+                
+                lock_mgr_->lock_exclusive(key);
+                txn->add_exclusive_lock(key);
+            }
+        }
+
+        // Write the Undo Log (call get WITHOUT a transaction to avoid double locking!)
         if (txn != nullptr) 
         {
-            auto old_value = get(key);
+            auto old_value = get(key); 
             if (old_value)  
             {
                 txn->add_log_record(std::make_shared<LogRecord>(
@@ -105,8 +122,19 @@ namespace minidb
         btree_->insert(key, value);
     }
 
-    std::optional<std::string> Database::get(const std::string& key) 
+    std::optional<std::string> Database::get(const std::string& key, Transaction* txn) 
     {
+        // 2PL: Acquire Shared lock (S-Lock)
+        if (txn != nullptr && lock_mgr_ != nullptr) 
+        {
+            // If we already hold X-Lock or S-Lock, we don't need to acquire another
+            if (!txn->holds_shared_lock(key) && !txn->holds_exclusive_lock(key)) 
+            {
+                lock_mgr_->lock_shared(key);
+                txn->add_shared_lock(key);
+            }
+        }
+
         // Use our new fast O(log N) search via BTree!
         auto val_opt = btree_->get(key);
         
@@ -124,6 +152,22 @@ namespace minidb
 
     void Database::remove(const std::string& key, Transaction* txn) 
     {
+        // 2PL: Acquire Exclusive lock (X-Lock)
+        if (txn != nullptr && lock_mgr_ != nullptr) 
+        {
+            if (!txn->holds_exclusive_lock(key)) 
+            {
+                if (txn->holds_shared_lock(key)) 
+                {
+                    lock_mgr_->unlock_shared(key);
+                    txn->remove_shared_lock(key);
+                }
+                
+                lock_mgr_->lock_exclusive(key);
+                txn->add_exclusive_lock(key);
+            }
+        }
+
         // Write the undo log before deletion
         if (txn != nullptr) 
         {
