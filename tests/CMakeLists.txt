@@ -27,3 +27,7 @@ add_test(NAME LRUReplacerTest COMMAND test_lru_replacer)
 add_executable(test_buffer_pool_manager test_buffer_pool_manager.cpp)
 target_link_libraries(test_buffer_pool_manager PRIVATE minidb_core gtest_main)
 add_test(NAME BufferPoolManagerTest COMMAND test_buffer_pool_manager)
+
+add_executable(test_lock_manager test_lock_manager.cpp)
+target_link_libraries(test_lock_manager PRIVATE minidb_core gtest gtest_main)
+add_test(NAME LockManager COMMAND test_buffer_pool_manager)
