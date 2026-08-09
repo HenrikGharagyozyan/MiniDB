@@ -2,6 +2,7 @@
 
 #include "minidb/Database.h"
 #include "minidb/TransactionManager.h"
+#include "minidb/LockManager.h"
 
 #include <string>
 #include <memory>
@@ -20,13 +21,17 @@ namespace minidb
         void run();
 
     private:
+        // Handler for a single input line
+        bool executeCommand(const std::string& line);
+
+    private:
         Database& db_;
         
         TransactionManager txn_manager_;
         std::shared_ptr<Transaction> current_txn_;
 
-        // Handler for a single input line
-        bool executeCommand(const std::string& line);
+        LockManager lock_manager_;
+
     };
 
 } // namespace minidb

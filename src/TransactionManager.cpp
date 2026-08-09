@@ -2,6 +2,7 @@
 #include "minidb/Database.h"
 #include "minidb/LogRecord.h"
 
+
 namespace minidb 
 {
 
@@ -26,6 +27,9 @@ namespace minidb
 
         // In the next commit, undo log cleanup logic will be added here
         txn->set_state(TransactionState::COMMITTED);
+
+        // Strict 2PL: release all locks on COMMIT
+        release_locks(txn);
 
         std::lock_guard<std::mutex> lock(mutex_);
         active_transactions_.erase(txn->get_transaction_id());
@@ -65,9 +69,28 @@ namespace minidb
             }
         }
 
+        // Strict 2PL: release all locks on ROLLBACK
+        release_locks(txn);
+
         // Remove the transaction from active transactions
         std::lock_guard<std::mutex> lock(mutex_);
         active_transactions_.erase(txn->get_transaction_id());
     }
 
-} // namespace minidb
+    void TransactionManager::release_locks(Transaction * txn)
+    {
+        if (!lock_manager_) 
+            return;
+
+        // Release all shared locks
+        for (const auto& key : txn->get_shared_locks()) 
+            lock_manager_->unlock_shared(key);
+
+        // Release all exclusive locks
+        for (const auto& key : txn->get_exclusive_locks()) 
+            lock_manager_->unlock_exclusive(key);
+
+        txn->clear_locks();
+    } 
+
+} //namespace minidb

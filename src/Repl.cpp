@@ -8,6 +8,8 @@ namespace minidb
     Repl::Repl(Database& db) 
         : db_(db), current_txn_(nullptr)
     {
+        db_.set_lock_manager(&lock_manager_);
+        txn_manager_.set_lock_manager(&lock_manager_);
     }
 
     void Repl::run() 
@@ -125,7 +127,7 @@ namespace minidb
             } 
             else 
             {
-                auto result = db_.get(key);
+                auto result = db_.get(key, current_txn_.get());
                 if (result) 
                 {
                     std::cout << *result << "\n";

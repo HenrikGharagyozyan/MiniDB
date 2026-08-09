@@ -30,4 +30,9 @@ add_test(NAME BufferPoolManagerTest COMMAND test_buffer_pool_manager)
 
 add_executable(test_lock_manager test_lock_manager.cpp)
 target_link_libraries(test_lock_manager PRIVATE minidb_core gtest gtest_main)
-add_test(NAME LockManager COMMAND test_buffer_pool_manager)
+add_test(NAME LockManager COMMAND test_lock_manager)
+
+add_executable(test_2pl test_2pl.cpp)
+target_link_libraries(test_2pl PRIVATE minidb_core gtest gtest_main)
+add_test(NAME 2PL COMMAND test_2pl)
+
