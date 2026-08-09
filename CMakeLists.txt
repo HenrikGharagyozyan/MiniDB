@@ -17,6 +17,7 @@ add_library(minidb_core
     src/LRUReplacer.cpp
     src/BufferPoolManager.cpp
     src/TransactionManager.cpp
+    src/LockManager.cpp
 )
 
 target_include_directories(minidb_core PUBLIC include)
