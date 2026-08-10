@@ -1,5 +1,7 @@
 #pragma once
 
+#include "minidb/ReadView.h"
+
 #include <cstdint>
 #include <vector>
 #include <memory>
