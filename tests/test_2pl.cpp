@@ -89,3 +89,48 @@ TEST_F(Strict2PLTest, ExclusiveLockBlocksReadUntilCommit)
     // Thread 2 should wait for t1 to finish and then read the updated value "200"
     EXPECT_EQ(txn2_read_val, "200");
 }
+
+TEST_F(Strict2PLTest, LockWaitTimeoutThrowsException) 
+{
+    LockManager lock_mgr;
+    Database db(test_db_file);
+    TransactionManager txn_mgr;
+
+    db.set_lock_manager(&lock_mgr);
+    txn_mgr.set_lock_manager(&lock_mgr);
+
+    // Поток 1 (Главный): Начинаем транзакцию и блокируем ключ "A"
+    auto txn1 = txn_mgr.begin();
+    db.set("A", "10", txn1.get()); // Взят X-Lock на "A"
+
+    std::atomic<bool> exception_thrown{false};
+
+    // Поток 2: Пытается прочитать "A"
+    std::thread t2([&]() 
+        {
+            auto txn2 = txn_mgr.begin();
+            try 
+            {
+                // T2 попытается взять S-Lock на "A". 
+                // Так как T1 держит X-Lock, T2 прождет 50мс и выбросит исключение.
+                db.get("A", txn2.get());
+            } 
+            catch (const std::runtime_error& e) 
+            {
+                std::string err_msg = e.what();
+                if (err_msg == "Lock wait timeout exceeded") 
+                {
+                    exception_thrown = true;
+                }
+            }
+            txn_mgr.abort(txn2.get(), &db);
+        });
+
+    t2.join();
+    
+    // Завершаем первую транзакцию
+    txn_mgr.commit(txn1.get());
+
+    // Проверяем, что таймаут действительно сработал!
+    EXPECT_TRUE(exception_thrown);
+}
