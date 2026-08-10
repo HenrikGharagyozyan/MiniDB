@@ -3,7 +3,7 @@
 namespace minidb 
 {
 
-    std::shared_mutex* LockManager::get_mutex_for_key(const std::string& key) 
+    std::shared_timed_mutex* LockManager::get_mutex_for_key(const std::string& key) 
     {
         // Acquire the global table mutex only for the duration of lookup/creation
         std::lock_guard<std::mutex> lock(table_mutex_);
@@ -14,7 +14,7 @@ namespace minidb
             // If no mutex exists for this key yet, create it
             auto [new_it, inserted] = lock_table_.emplace(
                 key, 
-                std::make_unique<std::shared_mutex>()
+                std::make_unique<std::shared_timed_mutex>()
             );
             return new_it->second.get();
         }
@@ -22,16 +22,16 @@ namespace minidb
         return it->second.get();
     }
 
-    void LockManager::lock_shared(const std::string& key) 
+    bool LockManager::lock_shared(const std::string& key, int timeout_ms) 
     {
         // Get the mutex and request shared access (S-Lock)
-        get_mutex_for_key(key)->lock_shared();
+        return get_mutex_for_key(key)->try_lock_shared_for(std::chrono::milliseconds(timeout_ms));
     }
 
-    void LockManager::lock_exclusive(const std::string& key) 
+    bool LockManager::lock_exclusive(const std::string& key, int timeout_ms) 
     {
         // Get the mutex and request exclusive access (X-Lock)
-        get_mutex_for_key(key)->lock();
+        return get_mutex_for_key(key)->try_lock_for(std::chrono::milliseconds(timeout_ms));
     }
 
     void LockManager::unlock_shared(const std::string& key) 
