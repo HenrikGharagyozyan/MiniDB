@@ -99,20 +99,20 @@ TEST_F(Strict2PLTest, LockWaitTimeoutThrowsException)
     db.set_lock_manager(&lock_mgr);
     txn_mgr.set_lock_manager(&lock_mgr);
 
-    // Поток 1 (Главный): Начинаем транзакцию и блокируем ключ "A"
+    // Thread 1 (main): start a transaction and lock key "A"
     auto txn1 = txn_mgr.begin();
-    db.set("A", "10", txn1.get()); // Взят X-Lock на "A"
+    db.set("A", "10", txn1.get()); // Acquire X-Lock on "A"
 
     std::atomic<bool> exception_thrown{false};
 
-    // Поток 2: Пытается прочитать "A"
+    // Thread 2: attempts to read "A"
     std::thread t2([&]() 
         {
             auto txn2 = txn_mgr.begin();
             try 
             {
-                // T2 попытается взять S-Lock на "A". 
-                // Так как T1 держит X-Lock, T2 прождет 50мс и выбросит исключение.
+                // T2 will try to acquire an S-Lock on "A".
+                // Since T1 holds the X-Lock, T2 will wait 50ms and then throw an exception.
                 db.get("A", txn2.get());
             } 
             catch (const std::runtime_error& e) 
@@ -128,9 +128,9 @@ TEST_F(Strict2PLTest, LockWaitTimeoutThrowsException)
 
     t2.join();
     
-    // Завершаем первую транзакцию
+    // Finish the first transaction
     txn_mgr.commit(txn1.get());
 
-    // Проверяем, что таймаут действительно сработал!
+    // Verify that the timeout really triggered!
     EXPECT_TRUE(exception_thrown);
 }
