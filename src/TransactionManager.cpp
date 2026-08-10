@@ -8,11 +8,25 @@ namespace minidb
 
     std::shared_ptr<Transaction> TransactionManager::begin() 
     {
+        std::lock_guard<std::mutex> lock(mutex_);
         // Issue an ID and increment the counter in a thread-safe way
         txn_id_t txn_id = next_txn_id_.fetch_add(1);
-        auto txn = std::make_shared<Transaction>(txn_id);
 
-        std::lock_guard<std::mutex> lock(mutex_);
+        // Собираем список ID всех текущих АКТИВНЫХ транзакций
+        std::unordered_set<txn_id_t> active_ids;
+        for (const auto& [id, txn_ptr] : active_transactions_) 
+        {
+            active_ids.insert(id);
+        }
+
+        // Создаем ReadView: наш ID, список активных, и ID следующей транзакции
+        // (next_txn_id_.load() вернет ID, который получит следующая транзакция)
+        ReadView view(txn_id, active_ids, next_txn_id_.load());
+
+        // Передаем снимок в конструктор транзакции
+        auto txn = std::make_shared<Transaction>(txn_id, std::move(view));
+
+        // Добавляем новую транзакцию в список активных
         active_transactions_[txn_id] = txn;
 
         return txn;
