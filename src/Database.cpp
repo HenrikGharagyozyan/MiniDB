@@ -93,7 +93,11 @@ namespace minidb
                     txn->remove_shared_lock(key);
                 }
                 
-                lock_mgr_->lock_exclusive(key);
+                // Проверяем результат!
+                if (!lock_mgr_->lock_exclusive(key)) 
+                {
+                    throw std::runtime_error("Lock wait timeout exceeded");
+                }
                 txn->add_exclusive_lock(key);
             }
         }
@@ -130,7 +134,11 @@ namespace minidb
             // If we already hold X-Lock or S-Lock, we don't need to acquire another
             if (!txn->holds_shared_lock(key) && !txn->holds_exclusive_lock(key)) 
             {
-                lock_mgr_->lock_shared(key);
+                // Проверяем результат!
+                if (!lock_mgr_->lock_shared(key)) 
+                {
+                    throw std::runtime_error("Lock wait timeout exceeded");
+                }
                 txn->add_shared_lock(key);
             }
         }
@@ -163,7 +171,11 @@ namespace minidb
                     txn->remove_shared_lock(key);
                 }
                 
-                lock_mgr_->lock_exclusive(key);
+                // Проверяем результат!
+                if (!lock_mgr_->lock_exclusive(key)) 
+                {
+                    throw std::runtime_error("Lock wait timeout exceeded");
+                }
                 txn->add_exclusive_lock(key);
             }
         }
