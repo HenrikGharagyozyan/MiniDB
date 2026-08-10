@@ -60,103 +60,119 @@ namespace minidb
         {
             std::cout << "Bye!\n";
             return false; // Signal to terminate the REPL
-        } 
-        else if (command == "BEGIN") 
-        {
-            if (current_txn_) 
-            {
-                std::cout << "Error: Transaction already active.\n";
-            } 
-            else 
-            {
-                current_txn_ = txn_manager_.begin();
-                std::cout << "Transaction " << current_txn_->get_transaction_id() << " started.\n";
-            }
         }
-        else if (command == "COMMIT") 
+        
+        try
         {
-            if (!current_txn_) 
+            if (command == "BEGIN") 
             {
-                std::cout << "Error: No active transaction.\n";
-            } 
-            else 
-            {
-                txn_manager_.commit(current_txn_.get());
-                std::cout << "Transaction committed.\n";
-                current_txn_ = nullptr;
-            }
-        }
-        else if (command == "ROLLBACK") 
-        {
-            if (!current_txn_) 
-            {
-                std::cout << "Error: No active transaction.\n";
-            } 
-            else 
-            {
-                txn_manager_.abort(current_txn_.get(), &db_);
-                std::cout << "Transaction rolled back.\n";
-                current_txn_ = nullptr;
-            }
-        }
-        else if (command == "SET") 
-        {
-            std::string key, value;
-            iss >> key;
-            std::getline(iss >> std::ws, value); 
-            
-            if (key.empty() || value.empty()) 
-            {
-                std::cout << "Error: Usage: SET <k> <v>\n";
-            } 
-            else 
-            {
-                // Pass the current transaction
-                db_.set(key, value, current_txn_.get());
-                std::cout << "OK\n";
-            }
-        } 
-        else if (command == "GET") 
-        {
-            std::string key;
-            iss >> key;
-            
-            if (key.empty()) 
-            {
-                std::cout << "Error: Usage: GET <k>\n";
-            } 
-            else 
-            {
-                auto result = db_.get(key, current_txn_.get());
-                if (result) 
+                if (current_txn_) 
                 {
-                    std::cout << *result << "\n";
+                    std::cout << "Error: Transaction already active.\n";
                 } 
                 else 
                 {
-                    std::cout << "(nil)\n";
+                    current_txn_ = txn_manager_.begin();
+                    std::cout << "Transaction " << current_txn_->get_transaction_id() << " started.\n";
                 }
             }
-        } 
-        else if (command == "DELETE") 
-        {
-            std::string key;
-            iss >> key;
-            
-            if (key.empty()) 
+            else if (command == "COMMIT") 
             {
-                std::cout << "Error: Usage: DELETE <k>\n";
+                if (!current_txn_) 
+                {
+                    std::cout << "Error: No active transaction.\n";
+                } 
+                else 
+                {
+                    txn_manager_.commit(current_txn_.get());
+                    std::cout << "Transaction committed.\n";
+                    current_txn_ = nullptr;
+                }
+            }
+            else if (command == "ROLLBACK") 
+            {
+                if (!current_txn_) 
+                {
+                    std::cout << "Error: No active transaction.\n";
+                } 
+                else 
+                {
+                    txn_manager_.abort(current_txn_.get(), &db_);
+                    std::cout << "Transaction rolled back.\n";
+                    current_txn_ = nullptr;
+                }
+            }
+            else if (command == "SET") 
+            {
+                std::string key, value;
+                iss >> key;
+                std::getline(iss >> std::ws, value); 
+                
+                if (key.empty() || value.empty()) 
+                {
+                    std::cout << "Error: Usage: SET <k> <v>\n";
+                } 
+                else 
+                {
+                    // Pass the current transaction
+                    db_.set(key, value, current_txn_.get());
+                    std::cout << "OK\n";
+                }
+            } 
+            else if (command == "GET") 
+            {
+                std::string key;
+                iss >> key;
+                
+                if (key.empty()) 
+                {
+                    std::cout << "Error: Usage: GET <k>\n";
+                } 
+                else 
+                {
+                    auto result = db_.get(key, current_txn_.get());
+                    if (result) 
+                    {
+                        std::cout << *result << "\n";
+                    } 
+                    else 
+                    {
+                        std::cout << "(nil)\n";
+                    }
+                }
+            } 
+            else if (command == "DELETE") 
+            {
+                std::string key;
+                iss >> key;
+                
+                if (key.empty()) 
+                {
+                    std::cout << "Error: Usage: DELETE <k>\n";
+                } 
+                else 
+                {
+                    // Pass the current transaction
+                    db_.remove(key, current_txn_.get());
+                    std::cout << "OK\n";
+                }
             } 
             else 
             {
-                // Pass the current transaction
-                db_.remove(key, current_txn_.get());
-                std::cout << "OK\n";
+                std::cout << "Error: Unknown command '" << command << "'\n";
             }
-        } 
-        else 
+        }
+        catch (const std::runtime_error& e) 
         {
-            std::cout << "Error: Unknown command '" << command << "'\n";
+            std::cout << "Error: " << e.what() << "\n";
+            
+            // Автоматический ROLLBACK при дедлоке/таймауте
+            if (current_txn_) 
+            {
+                std::cout << "Automatically aborting transaction " << current_txn_->get_transaction_id() << "...\n";
+                txn_manager_.abort(current_txn_.get(), &db_);
+                current_txn_ = nullptr;
+            }
         }
         
         return true;
