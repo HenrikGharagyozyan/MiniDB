@@ -18,6 +18,7 @@ add_library(minidb_core
     src/BufferPoolManager.cpp
     src/TransactionManager.cpp
     src/LockManager.cpp
+    src/ReadView.cpp
 )
 
 target_include_directories(minidb_core PUBLIC include)
