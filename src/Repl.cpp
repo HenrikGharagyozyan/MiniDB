@@ -166,7 +166,7 @@ namespace minidb
         {
             std::cout << "Error: " << e.what() << "\n";
             
-            // Автоматический ROLLBACK при дедлоке/таймауте
+            // Automatic ROLLBACK on deadlock/timeout
             if (current_txn_) 
             {
                 std::cout << "Automatically aborting transaction " << current_txn_->get_transaction_id() << "...\n";

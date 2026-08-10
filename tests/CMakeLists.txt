@@ -36,3 +36,6 @@ add_executable(test_2pl test_2pl.cpp)
 target_link_libraries(test_2pl PRIVATE minidb_core gtest gtest_main)
 add_test(NAME 2PL COMMAND test_2pl)
 
+add_executable(test_read_view test_read_view.cpp)
+target_link_libraries(test_read_view PRIVATE minidb_core GTest::gtest_main)
+add_test(NAME ReadViewTest COMMAND test_read_view)

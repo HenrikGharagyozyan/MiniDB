@@ -134,7 +134,7 @@ namespace minidb
             // If we already hold X-Lock or S-Lock, we don't need to acquire another
             if (!txn->holds_shared_lock(key) && !txn->holds_exclusive_lock(key)) 
             {
-                // Проверяем результат!
+                // Check the result!
                 if (!lock_mgr_->lock_shared(key)) 
                 {
                     throw std::runtime_error("Lock wait timeout exceeded");
