@@ -73,16 +73,19 @@ TEST(LockManagerTest, ExclusiveLockBlocksOthers)
                 std::this_thread::yield();
             }
 
-            // This call should BLOCK until t1 releases the X-Lock
-            lock_mgr.lock_shared(key);
+            // This call should BLOCK until t1 releases the X-Lock (or timeout)
+            bool success = lock_mgr.lock_shared(key);
             
-            // If we reach here, t1 should have already released the lock (x_locked == false)
-            if (!x_locked) 
+            if (success) 
             {
-                s_locked_after_x_released = true;
+                // If we reach here, t1 should have already released the lock (x_locked == false)
+                if (!x_locked) 
+                {
+                    s_locked_after_x_released = true;
+                }
+                
+                lock_mgr.unlock_shared(key);
             }
-            
-            lock_mgr.unlock_shared(key);
         });
 
     t1.join();
