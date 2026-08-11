@@ -1,8 +1,8 @@
-#include "minidb/Database.h"
-#include "minidb/Page.h"
-#include "minidb/LogRecord.h"
-#include "minidb/TransactionManager.h"
-#include "minidb/TupleMeta.h"
+#include "minidb/core/Database.h"
+#include "minidb/storage/Page.h"
+#include "minidb/concurrency/LogRecord.h"
+#include "minidb/concurrency/TransactionManager.h"
+#include "minidb/index/TupleMeta.h"
 
 #include <utility>
 #include <cstring>
@@ -102,40 +102,40 @@ namespace minidb
 
         if (txn != nullptr && txn_mgr_ != nullptr) 
         {
-            // Берем самую последнюю ФИЗИЧЕСКУЮ версию, чтобы привязать к ней новую
+            // Get the latest physical version to link the new one to
             auto raw_opt = btree_->get(key);
             if (raw_opt) 
             {
                 auto [old_meta, old_val] = decode_value(*raw_opt);
                 
-                // Генерируем LSN и сохраняем старую версию в лог
+                // Generate an LSN and save the old version to the log
                 undo_lsn = txn_mgr_->get_next_lsn();
                 auto log_record = std::make_shared<LogRecord>(
                     txn->get_transaction_id(), undo_lsn, UndoLogType::UPDATE, key, old_val, old_meta
                 );
                 
-                txn->add_log_record(log_record);           // Для ROLLBACK
-                txn_mgr_->add_undo_record(log_record);     // Для MVCC Version Chain
+                txn->add_log_record(log_record);           // For ROLLBACK
+                txn_mgr_->add_undo_record(log_record);     // For MVCC version chain
             }
             else 
             {
-                // Версии еще нет (INSERT)
+                // No previous version yet (INSERT)
                 txn->add_log_record(std::make_shared<LogRecord>(
                     txn->get_transaction_id(), 0, UndoLogType::INSERT, key
                 ));
             }
         }
 
-        // Создаем метаданные для НОВОЙ версии
+        // Create metadata for the NEW version
         TupleMeta new_meta;
         if (txn != nullptr) 
         {
             new_meta.txn_id = txn->get_transaction_id();
-            new_meta.undo_lsn = undo_lsn; // ССЫЛКА НА СТАРУЮ ВЕРСИЮ!
+            new_meta.undo_lsn = undo_lsn; // REFERENCE TO THE PREVIOUS VERSION
             new_meta.is_deleted = false;
         }
 
-        // Упаковываем и сохраняем!
+        // Encode and store!
         std::string encoded_value = encode_value(new_meta, value);
 
         // First write strictly to the WAL and flush to disk
@@ -148,50 +148,50 @@ namespace minidb
 
     std::optional<std::string> Database::get(const std::string& key, Transaction* txn) 
     {
-        // В MVCC ЧИТАТЕЛИ БОЛЬШЕ НЕ БЕРУТ S-Lock!
-        // Девиз MVCC в действии: Readers do not block writers.
+        // In MVCC, readers do not acquire S-locks anymore.
+        // MVCC motto in action: Readers do not block writers.
 
-        // Получаем самую свежую физическую версию из дерева
+        // Get the most recent physical version from the B-Tree
         auto raw_opt = btree_->get(key);
         if (!raw_opt) 
         {
-            return std::nullopt; // Ключа вообще нет в базе
+            return std::nullopt; // Key does not exist in the database
         }
 
         auto [meta, val] = decode_value(*raw_opt);
 
-        // Если транзакции нет (системный вызов), возвращаем как есть
+        // If there is no transaction (system call), return the value as is
         if (txn == nullptr) 
         {
             if (meta.is_deleted || val == TOMBSTONE) return std::nullopt;
             return val;
         }
 
-        // --- Visibility Engine: Идем по Version Chain ---
+        // --- Visibility Engine: traverse the Version Chain ---
         auto current_meta = meta;
         auto current_val = val;
         
-        // Пока текущая версия нам НЕ видна
+        // While the current version is NOT visible to us
         while (!txn->get_read_view().is_visible(current_meta.txn_id)) 
         {
             if (current_meta.undo_lsn == 0) 
             {
-                // Старых версий больше нет, значит для нашей транзакции ключа не существует
+                // No older versions remain, so the key does not exist for our transaction
                 return std::nullopt;
             }
 
-            // Идем в глобальный Undo Log за предыдущей версией!
+            // Retrieve the previous version from the global Undo Log
             auto undo_record = txn_mgr_->get_undo_record(current_meta.undo_lsn);
             if (!undo_record) 
             {
-                return std::nullopt; // Лог был очищен Vacuum'ом
+                return std::nullopt; // The log was cleared by the Vacuum
             }
 
             current_meta = undo_record->get_old_meta();
             current_val = undo_record->get_old_value();
         }
 
-        // Нашли видимую версию
+        // Found a visible version
         if (current_meta.is_deleted || current_val == TOMBSTONE) 
         {
             return std::nullopt;
@@ -240,13 +240,13 @@ namespace minidb
             }
         }
 
-        // Формируем метаданные для удаленной записи (Tombstone)
+        // Form metadata for the deleted record (Tombstone)
         TupleMeta new_meta;
         if (txn != nullptr) 
         {
             new_meta.txn_id = txn->get_transaction_id();
             new_meta.undo_lsn = undo_lsn;
-            new_meta.is_deleted = true; // <-- Флаг удаления
+            new_meta.is_deleted = true; // <-- deletion flag
         }
 
         std::string encoded_value = encode_value(new_meta, TOMBSTONE);
@@ -260,12 +260,12 @@ namespace minidb
     std::string Database::encode_value(const TupleMeta& meta, const std::string& val) 
     {
         std::string res;
-        // Резервируем память под размер структуры + размер строки
+        // Reserve memory for the structure size + string size
         res.resize(sizeof(TupleMeta) + val.size());
         
-        // Копируем байты структуры в начало
+        // Copy the bytes of the structure to the beginning
         std::memcpy(res.data(), &meta, sizeof(TupleMeta));
-        // Копируем саму строку после структуры
+        // Copy the string itself after the structure
         std::memcpy(res.data() + sizeof(TupleMeta), val.data(), val.size());
         
         return res;
@@ -274,10 +274,10 @@ namespace minidb
     std::pair<TupleMeta, std::string> Database::decode_value(const std::string& raw_val) 
     {
         TupleMeta meta;
-        // Читаем структуру из начала строки
+        // Read the structure from the beginning of the string
         std::memcpy(&meta, raw_val.data(), sizeof(TupleMeta));
         
-        // Отрезаем всё остальное — это наше реальное значение
+        // Trim off the rest — that's the actual value
         std::string val = raw_val.substr(sizeof(TupleMeta));
         
         return {meta, val};
