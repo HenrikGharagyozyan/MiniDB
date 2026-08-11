@@ -1,8 +1,8 @@
 #pragma once
 
-#include "minidb/Transaction.h"
-#include "minidb/LockManager.h"
-#include "minidb/LogRecord.h"
+#include "minidb/concurrency/Transaction.h"
+#include "minidb/concurrency/LockManager.h"
+#include "minidb/concurrency/LogRecord.h"
 
 #include <atomic>
 #include <memory>
@@ -36,13 +36,13 @@ namespace minidb
         // Abort the transaction (rollback changes) and release locks
         void abort(Transaction* txn, Database* db);
 
-        // Метод для генерации глобального LSN
+        // Method to generate a global LSN
         lsn_t get_next_lsn() { return next_lsn_.fetch_add(1); }
 
-        // Метод для сохранения записи в глобальный Undo Log
+        // Method to store a record in the global Undo Log
         void add_undo_record(std::shared_ptr<LogRecord> record);
 
-        // Метод для получения старой версии по LSN
+        // Method to retrieve an old version by LSN
         std::shared_ptr<LogRecord> get_undo_record(lsn_t lsn);
 
     private:
@@ -61,7 +61,7 @@ namespace minidb
         std::unordered_map<txn_id_t, std::shared_ptr<Transaction>> active_transactions_;
 
 
-        std::atomic<lsn_t> next_lsn_{1}; // Начинаем с 1. (0 означает "нет старой версии")
+        std::atomic<lsn_t> next_lsn_{1}; // Start from 1. (0 means "no previous version")
         
         std::mutex undo_mutex_;
         std::unordered_map<lsn_t, std::shared_ptr<LogRecord>> global_undo_log_;

@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include "minidb/Database.h"
+#include "minidb/core/Database.h"
 #include <filesystem>
 
 class DatabaseTest : public ::testing::Test 

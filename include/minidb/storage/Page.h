@@ -1,6 +1,6 @@
 #pragma once
 
-#include "minidb/Pager.h"
+#include "minidb/storage/Pager.h"
 #include <cstdint>
 #include <string>
 #include <optional>

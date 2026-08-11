@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
-#include "minidb/Database.h"
-#include "minidb/TransactionManager.h"
-#include "minidb/LockManager.h"
+#include "minidb/core/Database.h"
+#include "minidb/concurrency/TransactionManager.h"
+#include "minidb/concurrency/LockManager.h"
 
 #include <thread>
 #include <chrono>
@@ -35,34 +35,34 @@ TEST_F(Strict2PLTest, ExclusiveLockBlocksWriteUntilCommit)
     TransactionManager txn_mgr;
 
     db.set_lock_manager(&lock_mgr);
-    txn_mgr.set_lock_manager(&lock_mgr); // Здесь мы про это не забыли :)
+    txn_mgr.set_lock_manager(&lock_mgr); // We didn't forget to set this here :)
 
     db.set("account_a", "100");
 
     std::atomic<bool> txn1_written{false};
     std::atomic<bool> txn2_write_done{false};
 
-    // Поток 1: Писатель А
+    // Thread 1: Writer A
     std::thread t1([&]() 
         {
             auto txn1 = txn_mgr.begin();
-            db.set("account_a", "200", txn1.get()); // Берет X-Lock
+            db.set("account_a", "200", txn1.get()); // Acquires X-Lock
             txn1_written = true;
 
-            // Имитируем долгую работу, удерживая блокировку
+            // Simulate long work while holding the lock
             std::this_thread::sleep_for(std::chrono::milliseconds(150));
             txn_mgr.commit(txn1.get());
         });
 
-    // Поток 2: Писатель B (пытается обновить те же данные)
+    // Thread 2: Writer B (attempts to update the same data)
     std::thread t2([&]() 
         {
             while (!txn1_written) std::this_thread::yield();
 
             auto txn2 = txn_mgr.begin();
             
-            // Эта операция ЗАБЛОКИРУЕТСЯ, пока t1 не сделает commit,
-            // так как X-Lock конфликтует с X-Lock.
+            // This operation will BLOCK until t1 commits,
+            // because an X-Lock conflicts with another X-Lock.
             db.set("account_a", "300", txn2.get()); 
             txn2_write_done = true;
             
@@ -74,7 +74,7 @@ TEST_F(Strict2PLTest, ExclusiveLockBlocksWriteUntilCommit)
 
     EXPECT_TRUE(txn2_write_done);
     
-    // Проверяем, что в итоге сохранилось последнее значение от Писателя B
+    // Verify that the final value is from Writer B
     auto txn_check = txn_mgr.begin();
     auto val = db.get("account_a", txn_check.get());
     EXPECT_EQ(*val, "300");
@@ -91,7 +91,7 @@ TEST_F(Strict2PLTest, LockWaitTimeoutThrowsExceptionOnWrite)
     txn_mgr.set_lock_manager(&lock_mgr);
 
     auto txn1 = txn_mgr.begin();
-    db.set("A", "10", txn1.get()); // Берет X-Lock
+    db.set("A", "10", txn1.get()); // Acquires X-Lock
 
     std::atomic<bool> exception_thrown{false};
 
@@ -100,8 +100,8 @@ TEST_F(Strict2PLTest, LockWaitTimeoutThrowsExceptionOnWrite)
             auto txn2 = txn_mgr.begin();
             try 
             {
-                // Транзакция 2 пытается сделать ЗАПИСЬ (берет X-Lock).
-                // Так как Транзакция 1 еще не закомитилась, будет таймаут!
+                // Transaction 2 attempts to WRITE (acquires X-Lock).
+                // Since Transaction 1 has not committed yet, this will time out!
                 db.set("A", "20", txn2.get());
             } 
             catch (const std::runtime_error& e) 

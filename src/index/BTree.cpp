@@ -1,4 +1,4 @@
-#include "minidb/BTree.h"
+#include "minidb/index/BTree.h"
 
 #include <vector>
 #include <algorithm>

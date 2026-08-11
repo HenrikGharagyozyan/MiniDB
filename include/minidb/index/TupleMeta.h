@@ -10,16 +10,16 @@ namespace minidb
 
     struct TupleMeta 
     {
-        // Какая транзакция создала/обновила эту версию
+        // Which transaction created/updated this version
         txn_id_t txn_id;
 
-        // Если это запись в B-Tree, undo_lsn указывает на 
-        // ID записи в Undo Log, где лежит предыдущая версия.
-        // Если это 0, значит старых версий нет.
+        // If this is a B-Tree record, undo_lsn points to
+        // the ID of the record in the Undo Log that contains the previous version.
+        // If this is 0, there are no previous versions.
         lsn_t undo_lsn;
 
-        // Флаг, удалена ли эта версия логически (Tombstone). 
-        // Полезно для MVCC DELETE.
+        // Flag indicating whether this version is logically deleted (Tombstone).
+        // Useful for MVCC DELETE.
         bool is_deleted;
 
         TupleMeta() 

@@ -1,8 +1,8 @@
 #pragma once
 
-#include "minidb/Pager.h"
-#include "minidb/Page.h"
-#include "minidb/LRUReplacer.h"
+#include "minidb/storage/Pager.h"
+#include "minidb/storage/Page.h"
+#include "minidb/buffer/LRUReplacer.h"
 
 #include <unordered_map>
 #include <vector>

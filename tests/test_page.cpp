@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include "minidb/Page.h"
+#include "minidb/storage/Page.h"
 
 TEST(PageTest, InitAndInsertRecord) 
 {

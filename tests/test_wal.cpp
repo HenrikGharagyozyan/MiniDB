@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include "minidb/Wal.h"
+#include "minidb/storage/Wal.h"
 #include <filesystem>
 
 class WalTest : public ::testing::Test 

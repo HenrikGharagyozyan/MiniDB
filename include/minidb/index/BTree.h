@@ -1,8 +1,8 @@
 #pragma once
 
-#include "minidb/Pager.h"
-#include "minidb/BufferPoolManager.h"
-#include "minidb/Page.h"
+#include "minidb/storage/Pager.h"
+#include "minidb/buffer/BufferPoolManager.h"
+#include "minidb/storage/Page.h"
 #include <string>
 #include <optional>
 

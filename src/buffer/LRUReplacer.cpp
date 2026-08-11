@@ -1,4 +1,4 @@
-#include "minidb/LRUReplacer.h"
+#include "minidb/buffer/LRUReplacer.h"
 
 namespace minidb 
 {

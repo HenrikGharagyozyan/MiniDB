@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include "minidb/ReadView.h"
+#include "minidb/concurrency/ReadView.h"
 
 using namespace minidb;
 

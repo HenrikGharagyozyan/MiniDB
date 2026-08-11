@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 
-#include "minidb/Pager.h"
-#include "minidb/BufferPoolManager.h"
+#include "minidb/storage/Pager.h"
+#include "minidb/buffer/BufferPoolManager.h"
 
 #include <cstdio>
 #include <cstring>

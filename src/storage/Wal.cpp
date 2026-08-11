@@ -1,4 +1,4 @@
-#include "minidb/Wal.h"
+#include "minidb/storage/Wal.h"
 #include <iostream>
 #include <utility>
 

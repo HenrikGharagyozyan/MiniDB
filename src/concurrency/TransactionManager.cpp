@@ -1,6 +1,6 @@
-#include "minidb/TransactionManager.h"
-#include "minidb/Database.h"
-#include "minidb/LogRecord.h"
+#include "minidb/concurrency/TransactionManager.h"
+#include "minidb/core/Database.h"
+#include "minidb/concurrency/LogRecord.h"
 
 
 namespace minidb 
@@ -12,21 +12,21 @@ namespace minidb
         // Issue an ID and increment the counter in a thread-safe way
         txn_id_t txn_id = next_txn_id_.fetch_add(1);
 
-        // Собираем список ID всех текущих АКТИВНЫХ транзакций
+        // Collect the IDs of all currently ACTIVE transactions
         std::unordered_set<txn_id_t> active_ids;
         for (const auto& [id, txn_ptr] : active_transactions_) 
         {
             active_ids.insert(id);
         }
 
-        // Создаем ReadView: наш ID, список активных, и ID следующей транзакции
-        // (next_txn_id_.load() вернет ID, который получит следующая транзакция)
+        // Create a ReadView: our ID, the active set, and the next transaction ID
+        // (next_txn_id_.load() returns the ID that the next transaction will receive)
         ReadView view(txn_id, active_ids, next_txn_id_.load());
 
-        // Передаем снимок в конструктор транзакции
+        // Pass the snapshot into the transaction constructor
         auto txn = std::make_shared<Transaction>(txn_id, std::move(view));
 
-        // Добавляем новую транзакцию в список активных
+        // Add the new transaction to the active transactions map
         active_transactions_[txn_id] = txn;
 
         return txn;

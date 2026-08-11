@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include "minidb/LRUReplacer.h"
+#include "minidb/buffer/LRUReplacer.h"
 
 TEST(LRUReplacerTest, BasicTest) 
 {
