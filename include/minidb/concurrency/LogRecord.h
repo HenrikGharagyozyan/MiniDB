@@ -1,6 +1,6 @@
 #pragma once
 
-#include "minidb/TupleMeta.h"
+#include "minidb/index/TupleMeta.h"
 
 #include <string>
 
@@ -35,13 +35,13 @@ namespace minidb
 
     private:
         txn_id_t txn_id_;
-        lsn_t lsn_;            // Уникальный ID этой записи в логе
+        lsn_t lsn_;            // Unique ID of this log record
         UndoLogType type_;
         std::string key_;
         
         // Store the old value (not needed for INSERT, but critical for UPDATE and DELETE)
         std::string old_value_;
         
-        TupleMeta old_meta_;   // Метаданные старой версии
+        TupleMeta old_meta_;   // Metadata of the old version
     };
 } // namespace minidb
