@@ -1,4 +1,4 @@
-#include "minidb/BufferPoolManager.h"
+#include "minidb/buffer/BufferPoolManager.h"
 
 namespace minidb 
 {
