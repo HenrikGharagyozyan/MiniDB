@@ -90,6 +90,23 @@ namespace minidb
         std::lock_guard<std::mutex> lock(mutex_);
         active_transactions_.erase(txn->get_transaction_id());
     }
+    
+    void TransactionManager::add_undo_record(std::shared_ptr<LogRecord> record)
+    {
+        std::lock_guard<std::mutex> lock(undo_mutex_);
+        global_undo_log_[record->get_lsn()] = record;
+    }
+
+    std::shared_ptr<LogRecord> TransactionManager::get_undo_record(lsn_t lsn)
+    {
+        std::lock_guard<std::mutex> lock(undo_mutex_);
+        auto it = global_undo_log_.find(lsn);
+        if (it != global_undo_log_.end()) 
+        {
+            return it->second;
+        }
+        return nullptr;
+    }
 
     void TransactionManager::release_locks(Transaction * txn)
     {

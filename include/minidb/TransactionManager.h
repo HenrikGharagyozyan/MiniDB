@@ -2,6 +2,7 @@
 
 #include "minidb/Transaction.h"
 #include "minidb/LockManager.h"
+#include "minidb/LogRecord.h"
 
 #include <atomic>
 #include <memory>
@@ -35,6 +36,15 @@ namespace minidb
         // Abort the transaction (rollback changes) and release locks
         void abort(Transaction* txn, Database* db);
 
+        // Метод для генерации глобального LSN
+        lsn_t get_next_lsn() { return next_lsn_.fetch_add(1); }
+
+        // Метод для сохранения записи в глобальный Undo Log
+        void add_undo_record(std::shared_ptr<LogRecord> record);
+
+        // Метод для получения старой версии по LSN
+        std::shared_ptr<LogRecord> get_undo_record(lsn_t lsn);
+
     private:
         // Release all locks held by the transaction
         void release_locks(Transaction* txn);
@@ -49,6 +59,12 @@ namespace minidb
         
         // Store active transactions
         std::unordered_map<txn_id_t, std::shared_ptr<Transaction>> active_transactions_;
+
+
+        std::atomic<lsn_t> next_lsn_{1}; // Начинаем с 1. (0 означает "нет старой версии")
+        
+        std::mutex undo_mutex_;
+        std::unordered_map<lsn_t, std::shared_ptr<LogRecord>> global_undo_log_;
     };
 
 } // namespace minidb
