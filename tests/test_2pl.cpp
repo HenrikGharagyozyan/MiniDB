@@ -28,69 +28,60 @@ protected:
     }
 };
 
-TEST_F(Strict2PLTest, ExclusiveLockBlocksReadUntilCommit) 
+TEST_F(Strict2PLTest, ExclusiveLockBlocksWriteUntilCommit) 
 {
     LockManager lock_mgr;
     Database db(test_db_file);
     TransactionManager txn_mgr;
 
     db.set_lock_manager(&lock_mgr);
-    txn_mgr.set_lock_manager(&lock_mgr);
+    txn_mgr.set_lock_manager(&lock_mgr); // Здесь мы про это не забыли :)
 
-    // Prepare initial value
     db.set("account_a", "100");
 
     std::atomic<bool> txn1_written{false};
-    std::atomic<bool> txn2_read_done{false};
-    std::string txn2_read_val = "";
+    std::atomic<bool> txn2_write_done{false};
 
-    // Thread 1: start transaction 1 and update account_a -> 200
+    // Поток 1: Писатель А
     std::thread t1([&]() 
         {
             auto txn1 = txn_mgr.begin();
-            
-            // Acquire X-Lock on account_a
-            db.set("account_a", "200", txn1.get());
+            db.set("account_a", "200", txn1.get()); // Берет X-Lock
             txn1_written = true;
 
-            // Simulate long-running work inside the transaction (150 ms)
+            // Имитируем долгую работу, удерживая блокировку
             std::this_thread::sleep_for(std::chrono::milliseconds(150));
-
-            // Commit the transaction — this should release the lock
             txn_mgr.commit(txn1.get());
         });
 
-    // Thread 2: attempts to read account_a while transaction 1 is running
+    // Поток 2: Писатель B (пытается обновить те же данные)
     std::thread t2([&]() 
         {
-            // Wait until thread 1 performs db.set
-            while (!txn1_written) 
-            {
-                std::this_thread::yield();
-            }
+            while (!txn1_written) std::this_thread::yield();
 
             auto txn2 = txn_mgr.begin();
-
-            // This get() should block on the S-Lock until t1 commits()
-            auto val = db.get("account_a", txn2.get());
-            if (val) 
-            {
-                txn2_read_val = *val;
-            }
-            txn2_read_done = true;
-
+            
+            // Эта операция ЗАБЛОКИРУЕТСЯ, пока t1 не сделает commit,
+            // так как X-Lock конфликтует с X-Lock.
+            db.set("account_a", "300", txn2.get()); 
+            txn2_write_done = true;
+            
             txn_mgr.commit(txn2.get());
         });
 
     t1.join();
     t2.join();
 
-    EXPECT_TRUE(txn2_read_done);
-    // Thread 2 should wait for t1 to finish and then read the updated value "200"
-    EXPECT_EQ(txn2_read_val, "200");
+    EXPECT_TRUE(txn2_write_done);
+    
+    // Проверяем, что в итоге сохранилось последнее значение от Писателя B
+    auto txn_check = txn_mgr.begin();
+    auto val = db.get("account_a", txn_check.get());
+    EXPECT_EQ(*val, "300");
+    txn_mgr.commit(txn_check.get());
 }
 
-TEST_F(Strict2PLTest, LockWaitTimeoutThrowsException) 
+TEST_F(Strict2PLTest, LockWaitTimeoutThrowsExceptionOnWrite) 
 {
     LockManager lock_mgr;
     Database db(test_db_file);
@@ -99,26 +90,23 @@ TEST_F(Strict2PLTest, LockWaitTimeoutThrowsException)
     db.set_lock_manager(&lock_mgr);
     txn_mgr.set_lock_manager(&lock_mgr);
 
-    // Thread 1 (main): start a transaction and lock key "A"
     auto txn1 = txn_mgr.begin();
-    db.set("A", "10", txn1.get()); // Acquire X-Lock on "A"
+    db.set("A", "10", txn1.get()); // Берет X-Lock
 
     std::atomic<bool> exception_thrown{false};
 
-    // Thread 2: attempts to read "A"
     std::thread t2([&]() 
         {
             auto txn2 = txn_mgr.begin();
             try 
             {
-                // T2 will try to acquire an S-Lock on "A".
-                // Since T1 holds the X-Lock, T2 will wait 50ms and then throw an exception.
-                db.get("A", txn2.get());
+                // Транзакция 2 пытается сделать ЗАПИСЬ (берет X-Lock).
+                // Так как Транзакция 1 еще не закомитилась, будет таймаут!
+                db.set("A", "20", txn2.get());
             } 
             catch (const std::runtime_error& e) 
             {
-                std::string err_msg = e.what();
-                if (err_msg == "Lock wait timeout exceeded") 
+                if (std::string(e.what()) == "Lock wait timeout exceeded") 
                 {
                     exception_thrown = true;
                 }
@@ -127,10 +115,7 @@ TEST_F(Strict2PLTest, LockWaitTimeoutThrowsException)
         });
 
     t2.join();
-    
-    // Finish the first transaction
     txn_mgr.commit(txn1.get());
 
-    // Verify that the timeout really triggered!
     EXPECT_TRUE(exception_thrown);
 }
