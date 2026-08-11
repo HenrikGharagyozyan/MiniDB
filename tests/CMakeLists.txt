@@ -39,3 +39,7 @@ add_test(NAME 2PL COMMAND test_2pl)
 add_executable(test_read_view test_read_view.cpp)
 target_link_libraries(test_read_view PRIVATE minidb_core GTest::gtest_main)
 add_test(NAME ReadViewTest COMMAND test_read_view)
+
+add_executable(test_mvcc test_mvcc.cpp)
+target_link_libraries(test_mvcc PRIVATE minidb_core GTest::gtest_main)
+add_test(NAME MVCCTest COMMAND test_mvcc)
