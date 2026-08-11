@@ -1,5 +1,5 @@
-#include "minidb/Database.h"
-#include "minidb/Repl.h"
+#include "minidb/core/Database.h"
+#include "Repl.h"
 
 int main() 
 {

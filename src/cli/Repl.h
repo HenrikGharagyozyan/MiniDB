@@ -1,8 +1,8 @@
 #pragma once
 
-#include "minidb/Database.h"
-#include "minidb/TransactionManager.h"
-#include "minidb/LockManager.h"
+#include "minidb/core/Database.h"
+#include "minidb/concurrency/TransactionManager.h"
+#include "minidb/concurrency/LockManager.h"
 
 #include <string>
 #include <memory>
