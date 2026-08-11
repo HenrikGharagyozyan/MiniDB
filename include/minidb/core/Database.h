@@ -1,11 +1,11 @@
 #pragma once
 
-#include "minidb/Pager.h"
-#include "minidb/BufferPoolManager.h"
-#include "minidb/Wal.h"
-#include "minidb/BTree.h"
-#include "minidb/Transaction.h"
-#include "minidb/LockManager.h"
+#include "minidb/storage/Pager.h"
+#include "minidb/buffer/BufferPoolManager.h"
+#include "minidb/storage/Wal.h"
+#include "minidb/index/BTree.h"
+#include "minidb/concurrency/Transaction.h"
+#include "minidb/concurrency/LockManager.h"
 
 #include <string>
 #include <optional>
@@ -33,7 +33,7 @@ namespace minidb
         void remove(const std::string& key, Transaction* txn = nullptr);
 
     private:
-        // Помощники для упаковки и распаковки данных для B-Tree
+        // Helpers for packing and unpacking data for the B-Tree
         std::string encode_value(const TupleMeta& meta, const std::string& val);
         std::pair<TupleMeta, std::string> decode_value(const std::string& raw_val);
 
