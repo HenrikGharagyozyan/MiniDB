@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
-#include "minidb/Database.h"
-#include "minidb/TransactionManager.h"
-#include "minidb/LockManager.h"
+#include "minidb/core/Database.h"
+#include "minidb/concurrency/TransactionManager.h"
+#include "minidb/concurrency/LockManager.h"
 #include <filesystem>
 
 using namespace minidb;
@@ -40,47 +40,47 @@ protected:
 
 TEST_F(MVCCTest, NonBlockingReadersAndSnapshotIsolation) 
 {
-    // 1. Инициализируем данные в базе (начальное состояние)
+    // 1. Initialize data in the database (initial state)
     auto txn_init = txn_mgr_->begin();
     db_->set("user", "Henrik", txn_init.get());
-    txn_mgr_->commit(txn_init.get()); // <-- ИСПРАВЛЕНО
+    txn_mgr_->commit(txn_init.get()); // <-- FIXED
 
-    // 2. Старт Транзакции A (Читатель)
+    // 2. Start Transaction A (Reader)
     auto txn_A = txn_mgr_->begin();
 
-    // 3. Старт Транзакции B (Писатель)
+    // 3. Start Transaction B (Writer)
     auto txn_B = txn_mgr_->begin();
     db_->set("user", "John", txn_B.get());
 
-    // В B-Tree физически теперь лежит "John" с txn_id = txn_B!
+    // The B-Tree now physically contains "John" with txn_id = txn_B!
 
-    // 4. Транзакция A читает ключ "user".
-    // Она НЕ блокируется и видит СТАРУЮ версию "Henrik"!
+    // 4. Transaction A reads key "user".
+    // It does NOT block and sees the OLD version "Henrik"!
     auto val_A1 = db_->get("user", txn_A.get());
     ASSERT_TRUE(val_A1.has_value());
     EXPECT_EQ(*val_A1, "Henrik");
 
-    // Транзакция B видит СВОИ собственные не закомиченные изменения ("John")
+    // Transaction B sees its own uncommitted changes ("John")
     auto val_B = db_->get("user", txn_B.get());
     ASSERT_TRUE(val_B.has_value());
     EXPECT_EQ(*val_B, "John");
 
-    // 5. Транзакция B зафиксировала изменения (COMMIT)
-    txn_mgr_->commit(txn_B.get()); // <-- ИСПРАВЛЕНО
+    // 5. Transaction B committed the changes (COMMIT)
+    txn_mgr_->commit(txn_B.get()); // <-- FIXED
 
-    // 6. Транзакция A читает ключ СНОВА.
-    // Благодаря Snapshot Isolation, она все равно продолжает видеть "Henrik",
-    // потому что B была активна в момент создания снимка A!
+    // 6. Transaction A reads the key AGAIN.
+    // Thanks to Snapshot Isolation, it still sees "Henrik",
+    // because B was active when snapshot A was created!
     auto val_A2 = db_->get("user", txn_A.get());
     ASSERT_TRUE(val_A2.has_value());
     EXPECT_EQ(*val_A2, "Henrik");
 
-    // 7. Старт НОВОЙ Транзакции C (Читатель из будущего)
+    // 7. Start a NEW Transaction C (a reader from the future)
     auto txn_C = txn_mgr_->begin();
     auto val_C = db_->get("user", txn_C.get());
     ASSERT_TRUE(val_C.has_value());
-    EXPECT_EQ(*val_C, "John"); // C застала закомиченную версию!
+    EXPECT_EQ(*val_C, "John"); // C observed the committed version!
 
-    txn_mgr_->commit(txn_A.get()); // <-- ИСПРАВЛЕНО
-    txn_mgr_->commit(txn_C.get()); // <-- ИСПРАВЛЕНО
+    txn_mgr_->commit(txn_A.get()); // <-- FIXED
+    txn_mgr_->commit(txn_C.get()); // <-- FIXED
 }

@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include "minidb/LockManager.h"
+#include "minidb/concurrency/LockManager.h"
 
 #include <thread>
 #include <chrono>

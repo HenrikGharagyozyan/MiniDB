@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include "minidb/Pager.h"
+#include "minidb/storage/Pager.h"
 #include <filesystem>
 
 TEST(PagerTest, AllocateAndReadPage) 
