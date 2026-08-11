@@ -15,6 +15,9 @@
 namespace minidb 
 {
 
+    class TransactionManager;
+    struct TupleMeta;
+
     class Database 
     {
     public:
@@ -23,9 +26,16 @@ namespace minidb
 
         void set_lock_manager(LockManager* lock_mgr) { lock_mgr_ = lock_mgr; }
 
+        void set_transaction_manager(TransactionManager* txn_mgr) { txn_mgr_ = txn_mgr; }
+
         void set(const std::string& key, const std::string& value, Transaction* txn = nullptr);
         std::optional<std::string> get(const std::string& key, Transaction* txn = nullptr);
         void remove(const std::string& key, Transaction* txn = nullptr);
+
+    private:
+        // Помощники для упаковки и распаковки данных для B-Tree
+        std::string encode_value(const TupleMeta& meta, const std::string& val);
+        std::pair<TupleMeta, std::string> decode_value(const std::string& raw_val);
 
     private:
         std::string filename_;
@@ -36,6 +46,8 @@ namespace minidb
         std::unique_ptr<BTree> btree_;
 
         LockManager* lock_mgr_{ nullptr };
+
+        TransactionManager* txn_mgr_{ nullptr };
     };
 
 } // namespace minidb

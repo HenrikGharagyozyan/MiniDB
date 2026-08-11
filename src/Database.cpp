@@ -1,6 +1,8 @@
 #include "minidb/Database.h"
 #include "minidb/Page.h"
 #include "minidb/LogRecord.h"
+#include "minidb/TransactionManager.h"
+#include "minidb/TupleMeta.h"
 
 #include <utility>
 #include <cstring>
@@ -67,11 +69,13 @@ namespace minidb
             {
                 if (record.type == LogRecordType::SET) 
                 {
-                    btree_->insert(record.key, record.value);
+                    TupleMeta meta(0, 0, false);
+                    btree_->insert(record.key, encode_value(meta, record.value));
                 } 
                 else if (record.type == LogRecordType::DELETE) 
                 {
-                    btree_->insert(record.key, TOMBSTONE);
+                    TupleMeta meta(0, 0, true);
+                    btree_->insert(record.key, encode_value(meta, TOMBSTONE));
                 }
             }
             // After successfully applying all records to pages, clear the WAL
@@ -86,14 +90,6 @@ namespace minidb
         {
             if (!txn->holds_exclusive_lock(key)) 
             {
-                // Lock Upgrade: if we already read this key, release S-Lock before acquiring X-Lock
-                if (txn->holds_shared_lock(key)) 
-                {
-                    lock_mgr_->unlock_shared(key);
-                    txn->remove_shared_lock(key);
-                }
-                
-                // Проверяем результат!
                 if (!lock_mgr_->lock_exclusive(key)) 
                 {
                     throw std::runtime_error("Lock wait timeout exceeded");
@@ -102,60 +98,106 @@ namespace minidb
             }
         }
 
-        // Write the Undo Log (call get WITHOUT a transaction to avoid double locking!)
-        if (txn != nullptr) 
+        lsn_t undo_lsn = 0;
+
+        if (txn != nullptr && txn_mgr_ != nullptr) 
         {
-            auto old_value = get(key); 
-            if (old_value)  
+            // Берем самую последнюю ФИЗИЧЕСКУЮ версию, чтобы привязать к ней новую
+            auto raw_opt = btree_->get(key);
+            if (raw_opt) 
             {
-                txn->add_log_record(std::make_shared<LogRecord>(
-                    txn->get_transaction_id(), UndoLogType::UPDATE, key, *old_value));
-            } 
+                auto [old_meta, old_val] = decode_value(*raw_opt);
+                
+                // Генерируем LSN и сохраняем старую версию в лог
+                undo_lsn = txn_mgr_->get_next_lsn();
+                auto log_record = std::make_shared<LogRecord>(
+                    txn->get_transaction_id(), undo_lsn, UndoLogType::UPDATE, key, old_val, old_meta
+                );
+                
+                txn->add_log_record(log_record);           // Для ROLLBACK
+                txn_mgr_->add_undo_record(log_record);     // Для MVCC Version Chain
+            }
             else 
             {
+                // Версии еще нет (INSERT)
                 txn->add_log_record(std::make_shared<LogRecord>(
-                    txn->get_transaction_id(), UndoLogType::INSERT, key));
+                    txn->get_transaction_id(), 0, UndoLogType::INSERT, key
+                ));
             }
         }
+
+        // Создаем метаданные для НОВОЙ версии
+        TupleMeta new_meta;
+        if (txn != nullptr) 
+        {
+            new_meta.txn_id = txn->get_transaction_id();
+            new_meta.undo_lsn = undo_lsn; // ССЫЛКА НА СТАРУЮ ВЕРСИЮ!
+            new_meta.is_deleted = false;
+        }
+
+        // Упаковываем и сохраняем!
+        std::string encoded_value = encode_value(new_meta, value);
 
         // First write strictly to the WAL and flush to disk
         wal_->append_set(key, value);
         wal_->flush();
 
         // Only after that modify the BTree
-        btree_->insert(key, value);
+        btree_->insert(key, encoded_value);
     }
 
     std::optional<std::string> Database::get(const std::string& key, Transaction* txn) 
     {
-        // 2PL: Acquire Shared lock (S-Lock)
-        if (txn != nullptr && lock_mgr_ != nullptr) 
+        // В MVCC ЧИТАТЕЛИ БОЛЬШЕ НЕ БЕРУТ S-Lock!
+        // Девиз MVCC в действии: Readers do not block writers.
+
+        // Получаем самую свежую физическую версию из дерева
+        auto raw_opt = btree_->get(key);
+        if (!raw_opt) 
         {
-            // If we already hold X-Lock or S-Lock, we don't need to acquire another
-            if (!txn->holds_shared_lock(key) && !txn->holds_exclusive_lock(key)) 
-            {
-                // Check the result!
-                if (!lock_mgr_->lock_shared(key)) 
-                {
-                    throw std::runtime_error("Lock wait timeout exceeded");
-                }
-                txn->add_shared_lock(key);
-            }
+            return std::nullopt; // Ключа вообще нет в базе
         }
 
-        // Use our new fast O(log N) search via BTree!
-        auto val_opt = btree_->get(key);
-        
-        if (val_opt) 
+        auto [meta, val] = decode_value(*raw_opt);
+
+        // Если транзакции нет (системный вызов), возвращаем как есть
+        if (txn == nullptr) 
         {
-            if (*val_opt == TOMBSTONE) 
+            if (meta.is_deleted || val == TOMBSTONE) return std::nullopt;
+            return val;
+        }
+
+        // --- Visibility Engine: Идем по Version Chain ---
+        auto current_meta = meta;
+        auto current_val = val;
+        
+        // Пока текущая версия нам НЕ видна
+        while (!txn->get_read_view().is_visible(current_meta.txn_id)) 
+        {
+            if (current_meta.undo_lsn == 0) 
             {
-                return std::nullopt; // Key was deleted
+                // Старых версий больше нет, значит для нашей транзакции ключа не существует
+                return std::nullopt;
             }
-            return *val_opt; // Found the latest value
+
+            // Идем в глобальный Undo Log за предыдущей версией!
+            auto undo_record = txn_mgr_->get_undo_record(current_meta.undo_lsn);
+            if (!undo_record) 
+            {
+                return std::nullopt; // Лог был очищен Vacuum'ом
+            }
+
+            current_meta = undo_record->get_old_meta();
+            current_val = undo_record->get_old_value();
+        }
+
+        // Нашли видимую версию
+        if (current_meta.is_deleted || current_val == TOMBSTONE) 
+        {
+            return std::nullopt;
         }
         
-        return std::nullopt;
+        return current_val;
     }
 
     void Database::remove(const std::string& key, Transaction* txn) 
@@ -171,7 +213,6 @@ namespace minidb
                     txn->remove_shared_lock(key);
                 }
                 
-                // Проверяем результат!
                 if (!lock_mgr_->lock_exclusive(key)) 
                 {
                     throw std::runtime_error("Lock wait timeout exceeded");
@@ -180,24 +221,66 @@ namespace minidb
             }
         }
 
-        // Write the undo log before deletion
-        if (txn != nullptr) 
+        lsn_t undo_lsn = 0;
+
+        if (txn != nullptr && txn_mgr_ != nullptr) 
         {
-            auto old_value = get(key);
-            if (old_value) 
+            auto raw_opt = btree_->get(key);
+            if (raw_opt) 
             {
-                // Record the deleted value so rollback can restore it
-                txn->add_log_record(std::make_shared<LogRecord>(
-                    txn->get_transaction_id(), UndoLogType::DELETE, key, *old_value));
+                auto [old_meta, old_val] = decode_value(*raw_opt);
+                
+                undo_lsn = txn_mgr_->get_next_lsn();
+                auto log_record = std::make_shared<LogRecord>(
+                    txn->get_transaction_id(), undo_lsn, UndoLogType::DELETE, key, old_val, old_meta
+                );
+                
+                txn->add_log_record(log_record);
+                txn_mgr_->add_undo_record(log_record);
             }
         }
 
-        // Write deletion to the WAL
+        // Формируем метаданные для удаленной записи (Tombstone)
+        TupleMeta new_meta;
+        if (txn != nullptr) 
+        {
+            new_meta.txn_id = txn->get_transaction_id();
+            new_meta.undo_lsn = undo_lsn;
+            new_meta.is_deleted = true; // <-- Флаг удаления
+        }
+
+        std::string encoded_value = encode_value(new_meta, TOMBSTONE);
+
         wal_->append_delete(key);
         wal_->flush();
 
-        // Write a tombstone to the BTree
-        btree_->insert(key, TOMBSTONE);
+        btree_->insert(key, encoded_value);
+    }
+
+    std::string Database::encode_value(const TupleMeta& meta, const std::string& val) 
+    {
+        std::string res;
+        // Резервируем память под размер структуры + размер строки
+        res.resize(sizeof(TupleMeta) + val.size());
+        
+        // Копируем байты структуры в начало
+        std::memcpy(res.data(), &meta, sizeof(TupleMeta));
+        // Копируем саму строку после структуры
+        std::memcpy(res.data() + sizeof(TupleMeta), val.data(), val.size());
+        
+        return res;
+    }
+
+    std::pair<TupleMeta, std::string> Database::decode_value(const std::string& raw_val) 
+    {
+        TupleMeta meta;
+        // Читаем структуру из начала строки
+        std::memcpy(&meta, raw_val.data(), sizeof(TupleMeta));
+        
+        // Отрезаем всё остальное — это наше реальное значение
+        std::string val = raw_val.substr(sizeof(TupleMeta));
+        
+        return {meta, val};
     }
 
 } // namespace minidb   
