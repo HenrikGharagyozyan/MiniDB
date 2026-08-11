@@ -1,4 +1,5 @@
-#include "minidb/LockManager.h"
+#include "minidb/concurrency/LockManager.h"
+
 
 namespace minidb 
 {
