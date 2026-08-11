@@ -7,24 +7,24 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_compile_options(-Wall -Wextra -Wpedantic -Werror)
 
 # --- Core Library ---
+# Переименовали в minidb_core, чтобы совпадало с остальными командами
 add_library(minidb_core
-    src/Database.cpp 
-    src/Repl.cpp
-    src/Pager.cpp
-    src/Page.cpp
-    src/Wal.cpp
-    src/BTree.cpp
-    src/LRUReplacer.cpp
-    src/BufferPoolManager.cpp
-    src/TransactionManager.cpp
-    src/LockManager.cpp
-    src/ReadView.cpp
+    src/storage/Page.cpp
+    src/storage/Pager.cpp
+    src/storage/Wal.cpp
+    src/buffer/BufferPoolManager.cpp
+    src/buffer/LRUReplacer.cpp
+    src/index/BTree.cpp
+    src/concurrency/LockManager.cpp
+    src/concurrency/ReadView.cpp
+    src/concurrency/TransactionManager.cpp
+    src/core/Database.cpp
 )
 
 target_include_directories(minidb_core PUBLIC include)
 
 # --- CLI Executable ---
-add_executable(minidb_cli src/main.cpp)
+add_executable(minidb_cli src/cli/Repl.cpp src/cli/main.cpp)
 target_link_libraries(minidb_cli PRIVATE minidb_core)
 
 # --- Testing Setup ---
