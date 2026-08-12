@@ -43,3 +43,7 @@ add_test(NAME ReadViewTest COMMAND test_read_view)
 add_executable(test_mvcc test_mvcc.cpp)
 target_link_libraries(test_mvcc PRIVATE minidb_core GTest::gtest_main)
 add_test(NAME MVCCTest COMMAND test_mvcc)
+
+add_executable(test_sql_parser test_sql_parser.cpp)
+target_link_libraries(test_sql_parser PRIVATE minidb_core gtest gtest_main)
+add_test(NAME test_sql_parser COMMAND test_sql_parser)
