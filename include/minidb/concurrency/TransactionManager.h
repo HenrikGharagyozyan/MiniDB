@@ -45,6 +45,9 @@ namespace minidb
         // Method to retrieve an old version by LSN
         std::shared_ptr<LogRecord> get_undo_record(lsn_t lsn);
 
+        // Очистка устаревших записей Undo Log (Garbage Collection)
+        void vacuum();
+
     private:
         // Release all locks held by the transaction
         void release_locks(Transaction* txn);

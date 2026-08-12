@@ -1,6 +1,8 @@
-#include "Repl.h"
+#include "cli/Repl.h"
+
 #include <iostream>
 #include <sstream>
+
 
 namespace minidb 
 {
@@ -14,8 +16,8 @@ namespace minidb
 
     void Repl::run() 
     {
-        std::cout << "MiniDB v0.2.0 (REPL with Transactions)\n";
-        std::cout << "Commands: SET <k> <v>, GET <k>, DELETE <k>, BEGIN, COMMIT, ROLLBACK, EXIT\n";
+        std::cout << "MiniDB v0.2.1 (REPL with Transactions & MVCC)\n";
+        std::cout << "Commands: SET <k> <v>, GET <k>, DELETE <k>, BEGIN, COMMIT, ROLLBACK, VACUUM, EXIT\n";
 
         std::string line;
         while (true) 
@@ -100,6 +102,18 @@ namespace minidb
                     txn_manager_.abort(current_txn_.get(), &db_);
                     std::cout << "Transaction rolled back.\n";
                     current_txn_ = nullptr;
+                }
+            }
+            else if (command == "VACUUM") 
+            {
+                if (current_txn_) 
+                {
+                    std::cout << "Error: Cannot run VACUUM inside a transaction.\n";
+                }
+                else
+                {
+                    txn_manager_.vacuum();
+                    std::cout << "Vacuum completed. Old MVCC versions cleaned up.\n";
                 }
             }
             else if (command == "SET") 
