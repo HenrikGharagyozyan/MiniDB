@@ -19,6 +19,7 @@ add_library(minidb_core
     src/concurrency/ReadView.cpp
     src/concurrency/TransactionManager.cpp
     src/sql/Tokenizer.cpp
+    src/sql/Parser.cpp
     src/core/Database.cpp
 )
 
