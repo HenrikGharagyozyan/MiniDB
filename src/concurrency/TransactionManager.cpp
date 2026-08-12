@@ -2,6 +2,8 @@
 #include "minidb/core/Database.h"
 #include "minidb/concurrency/LogRecord.h"
 
+#include <algorithm>
+
 
 namespace minidb 
 {
@@ -106,6 +108,37 @@ namespace minidb
             return it->second;
         }
         return nullptr;
+    }
+
+    void TransactionManager::vacuum() 
+    {
+        // By default, assume the oldest active transaction is the next one that will be created
+        // (in case there are no active transactions right now).
+        txn_id_t min_active_id = next_txn_id_.load();
+
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            // Find the minimum ID among all active transactions
+            for (const auto& [id, txn] : active_transactions_) 
+            {
+                if (id < min_active_id) 
+                {
+                    min_active_id = id;
+                }
+            }
+        } // Release the mutex so we don't block the database during cleanup
+
+        {
+            std::lock_guard<std::mutex> lock(undo_mutex_);
+            
+            // With C++20 we can use std::erase_if for clean removal from unordered_map
+            std::erase_if(global_undo_log_, [min_active_id](const auto& pair) 
+                    {
+                        // If the log was created by a transaction older than the oldest active one,
+                        // that version is fully invisible (not needed) anymore. Remove it.
+                        return pair.second->get_txn_id() < min_active_id; 
+                    });
+        }
     }
 
     void TransactionManager::release_locks(Transaction * txn)
