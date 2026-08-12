@@ -3,6 +3,8 @@
 #include "minidb/core/Database.h"
 #include "minidb/concurrency/TransactionManager.h"
 #include "minidb/concurrency/LockManager.h"
+#include "minidb/sql/Catalog.h"
+#include "minidb/sql/Executor.h"
 
 #include <string>
 #include <memory>
@@ -32,6 +34,9 @@ namespace minidb
 
         LockManager lock_manager_;
 
+        // --- SQL Layer ---
+        Catalog catalog_;
+        Executor executor_;
     };
 
 } // namespace minidb

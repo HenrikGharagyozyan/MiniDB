@@ -1,4 +1,6 @@
-#include "cli/Repl.h"
+#include "Repl.h"
+#include "minidb/sql/Tokenizer.h"
+#include "minidb/sql/Parser.h"
 
 #include <iostream>
 #include <sstream>
@@ -8,7 +10,9 @@ namespace minidb
 {
 
     Repl::Repl(Database& db) 
-        : db_(db), current_txn_(nullptr)
+        : db_(db)
+        , current_txn_(nullptr)
+        , executor_(db_, catalog_)
     {
         db_.set_lock_manager(&lock_manager_);
         txn_manager_.set_lock_manager(&lock_manager_);
@@ -16,8 +20,10 @@ namespace minidb
 
     void Repl::run() 
     {
-        std::cout << "MiniDB v0.2.1 (REPL with Transactions & MVCC)\n";
-        std::cout << "Commands: SET <k> <v>, GET <k>, DELETE <k>, BEGIN, COMMIT, ROLLBACK, VACUUM, EXIT\n";
+        std::cout << "MiniDB v0.3.0 (SQL Engine & Transactions)\n";
+        std::cout << "SQL:  CREATE TABLE ..., INSERT INTO ..., SELECT * FROM ...\n";
+        std::cout << "KV:   SET <k> <v>, GET <k>, DELETE <k>\n";
+        std::cout << "Txn:  BEGIN, COMMIT, ROLLBACK, VACUUM, EXIT\n";
 
         std::string line;
         while (true) 
@@ -50,23 +56,44 @@ namespace minidb
         std::string command;
         iss >> command;
 
-        for (auto& c : command) 
-            c = toupper(c);
-
         if (command.empty()) 
         {
             return true;
         }
 
-        if (command == "EXIT" || command == "QUIT") 
+        if (!command.empty() && command.back() == ';') 
+        {
+            command.pop_back();
+        }
+
+        std::string upper_cmd = command;
+        for (auto& c : upper_cmd) 
+            c = toupper(c);
+
+        if (upper_cmd == "EXIT" || upper_cmd == "QUIT") 
         {
             std::cout << "Bye!\n";
-            return false; // Signal to terminate the REPL
+            return false; 
         }
-        
+
         try
         {
-            if (command == "BEGIN") 
+            // --- SQL COMMANDS HANDLER ---
+            if (upper_cmd == "CREATE" || upper_cmd == "INSERT" || upper_cmd == "SELECT") 
+            {
+                Tokenizer tokenizer(line);
+                auto tokens = tokenizer.tokenize();
+
+                Parser parser(tokens);
+                auto stmt = parser.parse();
+
+                // Передаем активную транзакцию в исполнитель SQL!
+                executor_.execute(stmt.get(), current_txn_.get());
+                return true;
+            }
+
+            // --- TRANSACTION & KV HANDLERS ---
+            if (upper_cmd == "BEGIN") 
             {
                 if (current_txn_) 
                 {
@@ -78,7 +105,7 @@ namespace minidb
                     std::cout << "Transaction " << current_txn_->get_transaction_id() << " started.\n";
                 }
             }
-            else if (command == "COMMIT") 
+            else if (upper_cmd == "COMMIT") 
             {
                 if (!current_txn_) 
                 {
@@ -91,7 +118,7 @@ namespace minidb
                     current_txn_ = nullptr;
                 }
             }
-            else if (command == "ROLLBACK") 
+            else if (upper_cmd == "ROLLBACK") 
             {
                 if (!current_txn_) 
                 {
@@ -104,7 +131,7 @@ namespace minidb
                     current_txn_ = nullptr;
                 }
             }
-            else if (command == "VACUUM") 
+            else if (upper_cmd == "VACUUM") 
             {
                 if (current_txn_) 
                 {
@@ -116,7 +143,7 @@ namespace minidb
                     std::cout << "Vacuum completed. Old MVCC versions cleaned up.\n";
                 }
             }
-            else if (command == "SET") 
+            else if (upper_cmd == "SET") 
             {
                 std::string key, value;
                 iss >> key;
@@ -128,12 +155,11 @@ namespace minidb
                 } 
                 else 
                 {
-                    // Pass the current transaction
                     db_.set(key, value, current_txn_.get());
                     std::cout << "OK\n";
                 }
             } 
-            else if (command == "GET") 
+            else if (upper_cmd == "GET") 
             {
                 std::string key;
                 iss >> key;
@@ -155,7 +181,7 @@ namespace minidb
                     }
                 }
             } 
-            else if (command == "DELETE") 
+            else if (upper_cmd == "DELETE") 
             {
                 std::string key;
                 iss >> key;
@@ -166,7 +192,6 @@ namespace minidb
                 } 
                 else 
                 {
-                    // Pass the current transaction
                     db_.remove(key, current_txn_.get());
                     std::cout << "OK\n";
                 }
@@ -176,11 +201,10 @@ namespace minidb
                 std::cout << "Error: Unknown command '" << command << "'\n";
             }
         }
-        catch (const std::runtime_error& e) 
+        catch (const std::exception& e) 
         {
             std::cout << "Error: " << e.what() << "\n";
             
-            // Automatic ROLLBACK on deadlock/timeout
             if (current_txn_) 
             {
                 std::cout << "Automatically aborting transaction " << current_txn_->get_transaction_id() << "...\n";
