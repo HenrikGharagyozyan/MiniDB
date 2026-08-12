@@ -21,6 +21,7 @@ add_library(minidb_core
     src/sql/Tokenizer.cpp
     src/sql/Parser.cpp
     src/core/Database.cpp
+    src/sql/Executor.cpp
 )
 
 target_include_directories(minidb_core PUBLIC include)
