@@ -33,6 +33,39 @@ namespace minidb
         return find_leaf_page(child_id, key);
     }
 
+    PageId BTree::find_leftmost_leaf()
+    {
+        PageId current_id = root_page_id_;
+        
+        while (true) 
+        {
+            PageData* raw_page = bpm_.fetch_page(current_id);
+            Page page(*raw_page);
+
+            // Если дошли до листа, возвращаем его ID
+            if (page.node_type() == NodeType::LEAF) 
+            {
+                bpm_.unpin_page(current_id, false);
+                return current_id;
+            }
+
+            // Это внутренний узел. Нам нужен самый левый ребенок.
+            PageId next_id;
+            if (page.num_records() > 0) 
+            {
+                next_id = page.get_internal_cell(0).second;
+            } 
+            else 
+            {
+                // Если вдруг записей нет (хотя такого не должно быть), берем правого ребенка
+                next_id = page.rightmost_child();
+            }
+
+            bpm_.unpin_page(current_id, false);
+            current_id = next_id; // Идем на уровень ниже
+        }
+    }
+
     std::optional<std::string> BTree::get(const std::string& key)
     {
         PageId leaf_id = find_leaf_page(root_page_id_, key);
@@ -63,6 +96,12 @@ namespace minidb
         // If there is no space, unpin it (we haven't modified the page yet) and call split
         bpm_.unpin_page(leaf_id, false);
         split_leaf(leaf_id, key, value);
+    }
+
+    BTreeIterator BTree::begin()
+    {
+        PageId first_leaf_id = find_leftmost_leaf();
+        return BTreeIterator(&bpm_, first_leaf_id, 0);
     }
 
     void BTree::split_leaf(PageId leaf_id, const std::string& new_key, const std::string& new_value)
