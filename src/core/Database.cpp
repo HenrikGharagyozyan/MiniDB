@@ -257,6 +257,73 @@ namespace minidb
         btree_->insert(key, encoded_value);
     }
 
+    std::vector<std::pair<std::string, std::string>> Database::scan(Transaction* txn) 
+    {
+        std::vector<std::pair<std::string, std::string>> result;
+        
+        // Получаем итератор, указывающий на самую первую запись в B+ дереве
+        auto it = btree_->begin();
+
+        while (!it.is_end()) 
+        {
+            std::string key = it.get_key();
+            std::string raw_val = it.get_value();
+            
+            // Сдвигаем итератор к следующей записи, пока текущая страница закреплена (pinned)
+            it.advance();
+
+            // Если ключ или значение пустые (например, удаленные или битые ячейки), пропускаем
+            if (key.empty() || raw_val.empty()) 
+            {
+                continue;
+            }
+
+            auto [meta, val] = decode_value(raw_val);
+
+            // Если нет транзакции, возвращаем просто последнюю версию (если не удалена)
+            if (txn == nullptr) 
+            {
+                if (!meta.is_deleted && val != TOMBSTONE) 
+                {
+                    result.push_back({key, val});
+                }
+                continue;
+            }
+
+            // --- Visibility Engine (MVCC): проверка видимости для текущей транзакции ---
+            auto current_meta = meta;
+            auto current_val = val;
+            bool is_visible = true;
+            
+            while (!txn->get_read_view().is_visible(current_meta.txn_id)) 
+            {
+                if (current_meta.undo_lsn == 0) 
+                {
+                    is_visible = false; // Нет старых версий, запись не существует для нас
+                    break;
+                }
+
+                auto undo_record = txn_mgr_->get_undo_record(current_meta.undo_lsn);
+                if (!undo_record) 
+                {
+                    is_visible = false; // Лог очищен Vacuum'ом
+                    break;
+                }
+
+                current_meta = undo_record->get_old_meta();
+                current_val = undo_record->get_old_value();
+            }
+
+            // Если версия найдена, видима и не является Tombstone (удаленной)
+            if (is_visible && !current_meta.is_deleted && current_val != TOMBSTONE) 
+            {
+                result.push_back({key, current_val});
+            }
+        }
+
+        return result;
+    }
+
     std::string Database::encode_value(const TupleMeta& meta, const std::string& val) 
     {
         std::string res;

@@ -10,6 +10,7 @@
 #include <string>
 #include <optional>
 #include <memory>
+#include <vector>
 
 
 namespace minidb 
@@ -31,6 +32,8 @@ namespace minidb
         void set(const std::string& key, const std::string& value, Transaction* txn = nullptr);
         std::optional<std::string> get(const std::string& key, Transaction* txn = nullptr);
         void remove(const std::string& key, Transaction* txn = nullptr);
+
+        std::vector<std::pair<std::string, std::string>> scan(Transaction* txn = nullptr);
 
     private:
         // Helpers for packing and unpacking data for the B-Tree
