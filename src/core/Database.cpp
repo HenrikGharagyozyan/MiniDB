@@ -261,18 +261,28 @@ namespace minidb
     {
         std::vector<std::pair<std::string, std::string>> result;
         
-        // Получаем итератор, указывающий на самую первую запись в B+ дереве
+        // Get an iterator pointing to the very first record in the B+ tree
         auto it = btree_->begin();
+
+        // Управляем временной транзакцией через умный указатель
+        std::shared_ptr<Transaction> temp_txn = nullptr;
+        Transaction* effective_txn = txn;
+        
+        if (effective_txn == nullptr && txn_mgr_ != nullptr) 
+        {
+            temp_txn = txn_mgr_->begin(); // Правильный метод begin()
+            effective_txn = temp_txn.get();
+        }
 
         while (!it.is_end()) 
         {
             std::string key = it.get_key();
             std::string raw_val = it.get_value();
             
-            // Сдвигаем итератор к следующей записи, пока текущая страница закреплена (pinned)
+            // Advance the iterator to the next record while the current page remains pinned
             it.advance();
 
-            // Если ключ или значение пустые (например, удаленные или битые ячейки), пропускаем
+            // If key or value are empty (e.g., deleted or corrupted cells), skip
             if (key.empty() || raw_val.empty()) 
             {
                 continue;
@@ -280,8 +290,7 @@ namespace minidb
 
             auto [meta, val] = decode_value(raw_val);
 
-            // Если нет транзакции, возвращаем просто последнюю версию (если не удалена)
-            if (txn == nullptr) 
+            if (effective_txn == nullptr) 
             {
                 if (!meta.is_deleted && val != TOMBSTONE) 
                 {
@@ -290,23 +299,23 @@ namespace minidb
                 continue;
             }
 
-            // --- Visibility Engine (MVCC): проверка видимости для текущей транзакции ---
+            // --- Visibility Engine (MVCC): visibility check for the current transaction ---
             auto current_meta = meta;
             auto current_val = val;
             bool is_visible = true;
             
-            while (!txn->get_read_view().is_visible(current_meta.txn_id)) 
+            while (!effective_txn->get_read_view().is_visible(current_meta.txn_id)) 
             {
                 if (current_meta.undo_lsn == 0) 
                 {
-                    is_visible = false; // Нет старых версий, запись не существует для нас
+                    is_visible = false;
                     break;
                 }
 
                 auto undo_record = txn_mgr_->get_undo_record(current_meta.undo_lsn);
                 if (!undo_record) 
                 {
-                    is_visible = false; // Лог очищен Vacuum'ом
+                    is_visible = false;
                     break;
                 }
 
@@ -314,11 +323,16 @@ namespace minidb
                 current_val = undo_record->get_old_value();
             }
 
-            // Если версия найдена, видима и не является Tombstone (удаленной)
             if (is_visible && !current_meta.is_deleted && current_val != TOMBSTONE) 
             {
                 result.push_back({key, current_val});
             }
+        }
+
+        // Закрываем временную транзакцию, чтобы не утекала память
+        if (temp_txn != nullptr && txn_mgr_ != nullptr)
+        {
+            txn_mgr_->commit(temp_txn.get());
         }
 
         return result;
@@ -344,7 +358,7 @@ namespace minidb
         // Read the structure from the beginning of the string
         std::memcpy(&meta, raw_val.data(), sizeof(TupleMeta));
         
-        // Trim off the rest — that's the actual value
+        // Trim off the rest - that's the actual value
         std::string val = raw_val.substr(sizeof(TupleMeta));
         
         return {meta, val};

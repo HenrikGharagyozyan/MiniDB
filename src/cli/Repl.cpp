@@ -87,7 +87,7 @@ namespace minidb
                 Parser parser(tokens);
                 auto stmt = parser.parse();
 
-                // Передаем активную транзакцию в исполнитель SQL!
+                // Pass the active transaction to the SQL executor!
                 executor_.execute(stmt.get(), current_txn_.get());
                 return true;
             }

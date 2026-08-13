@@ -72,14 +72,24 @@ namespace minidb
         }
         std::cout << "---------------------\n";
 
-        // For demonstration, try fetching the first record (key "users:1")
-        std::string test_key = stmt->table_name + ":1";
-        auto val = db_.get(test_key, txn);
-        if (val) 
+        // Full table scan: retrieve all records from the DB taking the transaction into account
+        auto all_records = db_.scan(txn);
+
+        // Prefix to search for (e.g. "users:")
+        std::string prefix = stmt->table_name + ":";
+        int row_count = 0;
+
+        // Iterate over all records and select those that belong to our table
+        for (const auto& [key, value] : all_records) 
         {
-            std::cout << *val << "\n";
-        } 
-        else 
+            if (key.starts_with(prefix)) 
+            {
+                std::cout << value << "\n";
+                row_count++;
+            }
+        }
+
+        if (row_count == 0) 
         {
             std::cout << "(No rows found)\n";
         }

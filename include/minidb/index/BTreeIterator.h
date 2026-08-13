@@ -11,23 +11,23 @@ namespace minidb
     class BTreeIterator 
     {
     public:
-        // Конструктор принимает BufferPoolManager, ID стартовой страницы и индекс записи
+        // Constructor takes a BufferPoolManager, the start page ID and a record index
         BTreeIterator(BufferPoolManager* bpm, PageId current_page_id, uint16_t record_index);
         
-        // Деструктор обязательно должен освобождать (unpin) страницу в BufferPool
+        // Destructor must unpin the page in the BufferPool
         ~BTreeIterator();
 
-        // Проверка, достигли ли мы конца дерева
+        // Check whether we've reached the end of the tree
         bool is_end() const;
 
-        // Получить ключ и значение по текущей позиции
+        // Get key and value at the current position
         std::string get_key();
         std::string get_value();
 
-        // Сдвинуть итератор к следующей записи
+        // Advance the iterator to the next record
         void advance();
     private:
-        // Вспомогательные методы для работы с BufferPoolManager
+        // Helper methods for working with the BufferPoolManager
         void fetch_page();
         void unpin_page();
         
@@ -36,7 +36,7 @@ namespace minidb
         PageId current_page_id_;
         uint16_t record_index_;
         
-        // Указатель на сырые данные страницы, загруженные из BufferPool
+        // Pointer to the raw page data loaded from the BufferPool
         PageData* current_page_data_{nullptr}; 
         
     };

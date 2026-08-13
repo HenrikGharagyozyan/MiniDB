@@ -42,14 +42,14 @@ namespace minidb
             PageData* raw_page = bpm_.fetch_page(current_id);
             Page page(*raw_page);
 
-            // Если дошли до листа, возвращаем его ID
+            // If we've reached a leaf, return its ID
             if (page.node_type() == NodeType::LEAF) 
             {
                 bpm_.unpin_page(current_id, false);
                 return current_id;
             }
 
-            // Это внутренний узел. Нам нужен самый левый ребенок.
+            // This is an internal node. We need the leftmost child.
             PageId next_id;
             if (page.num_records() > 0) 
             {
@@ -57,12 +57,12 @@ namespace minidb
             } 
             else 
             {
-                // Если вдруг записей нет (хотя такого не должно быть), берем правого ребенка
+                // If there are no records (shouldn't happen), take the rightmost child
                 next_id = page.rightmost_child();
             }
 
             bpm_.unpin_page(current_id, false);
-            current_id = next_id; // Идем на уровень ниже
+            current_id = next_id; // Descend one level
         }
     }
 
