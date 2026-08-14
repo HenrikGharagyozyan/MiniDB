@@ -242,11 +242,11 @@ namespace minidb
 
         // Form metadata for the deleted record (Tombstone)
         TupleMeta new_meta;
-        if (txn != nullptr) 
+        new_meta.is_deleted = true; // <-- deletion flag, also for system deletes (txn == nullptr)
+        if (txn != nullptr)
         {
             new_meta.txn_id = txn->get_transaction_id();
             new_meta.undo_lsn = undo_lsn;
-            new_meta.is_deleted = true; // <-- deletion flag
         }
 
         std::string encoded_value = encode_value(new_meta, TOMBSTONE);
@@ -264,13 +264,13 @@ namespace minidb
         // Get an iterator pointing to the very first record in the B+ tree
         auto it = btree_->begin();
 
-        // Управляем временной транзакцией через умный указатель
+        // Manage the temporary transaction through a smart pointer
         std::shared_ptr<Transaction> temp_txn = nullptr;
         Transaction* effective_txn = txn;
-        
-        if (effective_txn == nullptr && txn_mgr_ != nullptr) 
+
+        if (effective_txn == nullptr && txn_mgr_ != nullptr)
         {
-            temp_txn = txn_mgr_->begin(); // Правильный метод begin()
+            temp_txn = txn_mgr_->begin();
             effective_txn = temp_txn.get();
         }
 
@@ -329,7 +329,7 @@ namespace minidb
             }
         }
 
-        // Закрываем временную транзакцию, чтобы не утекала память
+        // Close the temporary transaction so it does not leak
         if (temp_txn != nullptr && txn_mgr_ != nullptr)
         {
             txn_mgr_->commit(temp_txn.get());

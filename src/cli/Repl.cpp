@@ -16,6 +16,10 @@ namespace minidb
     {
         db_.set_lock_manager(&lock_manager_);
         txn_manager_.set_lock_manager(&lock_manager_);
+
+        // Without this the database cannot write undo records,
+        // so ROLLBACK would have nothing to undo
+        db_.set_transaction_manager(&txn_manager_);
     }
 
     void Repl::run() 
