@@ -1,8 +1,24 @@
 #include "minidb/sql/Executor.h"
 
+#include <sstream>
+
 
 namespace minidb
 {
+
+    // Helper function to split CSV row into values
+    static std::vector<std::string> parse_csv_row(const std::string& row_str) 
+    {
+        std::vector<std::string> fields;
+        std::string field;
+        std::stringstream ss(row_str);
+        while (std::getline(ss, field, ',')) 
+        {
+            fields.push_back(field);
+        }
+        return fields;
+    }
+
 
     Executor::Executor(Database& db, Catalog& catalog)
         : db_(db), catalog_(catalog) 
@@ -64,6 +80,26 @@ namespace minidb
     void Executor::execute_select(const SelectStatement* stmt, Transaction* txn)
     {
         const auto& schema = catalog_.get_table(stmt->table_name);
+
+        // If WHERE clause exists, find the index of the column
+        int where_col_idx = -1;
+        if (stmt->where_clause.has_value()) 
+        {
+            for (size_t i = 0; i < schema.columns.size(); ++i) 
+            {
+                if (schema.columns[i].name == stmt->where_clause->column_name) 
+                {
+                    where_col_idx = static_cast<int>(i);
+                    break;
+                }
+            }
+            if (where_col_idx == -1) 
+            {
+                throw std::runtime_error("Execution error: Column '" + 
+                                         stmt->where_clause->column_name + 
+                                         "' not found in table '" + stmt->table_name + "'");
+            }
+        }
         
         // Print column headers
         for (size_t i = 0; i < schema.columns.size(); ++i) 
@@ -84,6 +120,22 @@ namespace minidb
         {
             if (key.starts_with(prefix)) 
             {
+                // Apply WHERE condition if present
+                if (stmt->where_clause.has_value()) 
+                {
+                    auto fields = parse_csv_row(value);
+                    if (where_col_idx >= static_cast<int>(fields.size())) 
+                    {
+                        continue;
+                    }
+
+                    // Check condition
+                    if (stmt->where_clause->op == "=" && fields[where_col_idx] != stmt->where_clause->value) 
+                    {
+                        continue; // Skip row if it doesn't match
+                    }
+                }
+
                 std::cout << value << "\n";
                 row_count++;
             }
