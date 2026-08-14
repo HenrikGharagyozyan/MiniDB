@@ -24,6 +24,11 @@ namespace minidb
         LEFT_PAREN, // (
         RIGHT_PAREN,// )
         EQUALS,     // =
+        NOT_EQUALS,     // !=
+        GREATER,        // >
+        LESS,           // <
+        GREATER_EQUALS, // >=
+        LESS_EQUALS,    // <=
         
         // Control tokens
         END_OF_FILE,
