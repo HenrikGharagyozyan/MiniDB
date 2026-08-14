@@ -2,6 +2,8 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <optional>
+
 
 namespace minidb 
 {
@@ -41,12 +43,21 @@ namespace minidb
     
     // --- Structures for SELECT ---
 
+    // Structure for WHERE condition (e.g. id = 1)
+    struct WhereClause 
+    {
+        std::string column_name;
+        std::string op; // "="
+        std::string value;
+    };
+
     // AST for a query: SELECT * FROM <name>;
     // (For now we only support selecting all columns via '*')
     struct SelectStatement : public SQLStatement 
     {
         std::string table_name;
-        bool select_all = true; 
+        bool select_all = true;
+        std::optional<WhereClause> where_clause;
     };
 
 } // namespace minidb
