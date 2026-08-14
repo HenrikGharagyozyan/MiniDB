@@ -144,24 +144,27 @@ namespace minidb
             WhereClause where;
             where.column_name = consume(TokenType::IDENTIFIER, "Expected column name after WHERE").value;
             
-            // Check operator
-            if (!is_at_end() && peek().type == TokenType::EQUALS) 
+            // Check operator for new types
+            TokenType op_type = peek().type;
+            if (op_type == TokenType::EQUALS || op_type == TokenType::NOT_EQUALS ||
+                op_type == TokenType::GREATER || op_type == TokenType::LESS ||
+                op_type == TokenType::GREATER_EQUALS || op_type == TokenType::LESS_EQUALS) 
             {
-                where.op = consume(TokenType::EQUALS, "Expected '='").value;
+                where.op = peek().value;
+                pos_++; // Consume operator
             } 
             else 
             {
-                throw std::runtime_error("Syntax Error: Expected '=' in WHERE clause");
+                throw std::runtime_error("Syntax Error: Expected operator (=, !=, >, <, >=, <=) in WHERE clause");
             }
 
-            // Value (NUMBER, STRING or IDENTIFIER)
             if (match(TokenType::NUMBER) || match(TokenType::STRING) || match(TokenType::IDENTIFIER)) 
             {
                 where.value = previous().value;
             } 
             else 
             {
-                throw std::runtime_error("Syntax Error: Expected value after '=' in WHERE clause");
+                throw std::runtime_error("Syntax Error: Expected value after operator in WHERE clause");
             }
 
             stmt->where_clause = where;
