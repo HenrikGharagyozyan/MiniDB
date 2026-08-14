@@ -54,20 +54,63 @@ namespace minidb
             } 
             else 
             {
-                // Handle single-character tokens
-                switch (c) 
+                // Handle operators that can be 1 or 2 characters (!=, >=, <=)
+                if (c == '!') 
                 {
-                    case '*': tokens.push_back({ TokenType::STAR, "*"        });  advance(); break;
-                    case ',': tokens.push_back({ TokenType::COMMA, ","       });  advance(); break;
-                    case ';': tokens.push_back({ TokenType::SEMICOLON, ";"   });  advance(); break;
-                    case '(': tokens.push_back({ TokenType::LEFT_PAREN, "("  });  advance(); break;
-                    case ')': tokens.push_back({ TokenType::RIGHT_PAREN, ")" });  advance(); break;
-                    case '=': tokens.push_back({ TokenType::EQUALS, "="      });  advance(); break;
-                    default:
-                        // If we encountered an unknown character
-                        tokens.push_back({ TokenType::INVALID, std::string(1, c) });
-                        advance();
-                        break;
+                    advance();
+                    if (current_char() == '=') 
+                    { 
+                        tokens.push_back({ TokenType::NOT_EQUALS, "!=" }); 
+                        advance(); 
+                    }
+                    else 
+                    { 
+                        tokens.push_back({ TokenType::INVALID, "!" }); 
+                    }
+                }
+                else if (c == '>') 
+                {
+                    advance();
+                    if (current_char() == '=') 
+                    { 
+                        tokens.push_back({ TokenType::GREATER_EQUALS, ">=" }); 
+                        advance(); 
+                    }
+                    else 
+                    { 
+                        tokens.push_back({ TokenType::GREATER, ">" }); 
+                    }
+                }
+                else if (c == '<') 
+                {
+                    advance();
+                    if (current_char() == '=') 
+                    { 
+                        tokens.push_back({ TokenType::LESS_EQUALS, "<=" }); 
+                        advance(); 
+                    }
+                    else 
+                    { 
+                        tokens.push_back({ TokenType::LESS, "<" }); 
+                    }
+                }
+                else
+                {
+                    // Handle single-character tokens
+                    switch (c) 
+                    {
+                        case '*': tokens.push_back({ TokenType::STAR, "*"        });  advance(); break;
+                        case ',': tokens.push_back({ TokenType::COMMA, ","       });  advance(); break;
+                        case ';': tokens.push_back({ TokenType::SEMICOLON, ";"   });  advance(); break;
+                        case '(': tokens.push_back({ TokenType::LEFT_PAREN, "("  });  advance(); break;
+                        case ')': tokens.push_back({ TokenType::RIGHT_PAREN, ")" });  advance(); break;
+                        case '=': tokens.push_back({ TokenType::EQUALS, "="      });  advance(); break;
+                        default:
+                            // If we encountered an unknown character
+                            tokens.push_back({ TokenType::INVALID, std::string(1, c) });
+                            advance();
+                            break;
+                    }
                 }
             }
         }
