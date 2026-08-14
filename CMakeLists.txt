@@ -15,6 +15,7 @@ add_library(minidb_core
     src/buffer/BufferPoolManager.cpp
     src/buffer/LRUReplacer.cpp
     src/index/BTree.cpp
+    src/index/BTreeIterator.cpp
     src/concurrency/LockManager.cpp
     src/concurrency/ReadView.cpp
     src/concurrency/TransactionManager.cpp

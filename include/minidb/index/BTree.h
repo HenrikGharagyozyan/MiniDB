@@ -3,8 +3,11 @@
 #include "minidb/storage/Pager.h"
 #include "minidb/buffer/BufferPoolManager.h"
 #include "minidb/storage/Page.h"
+#include "minidb/index/BTreeIterator.h"
+
 #include <string>
 #include <optional>
+
 
 namespace minidb 
 {
@@ -20,16 +23,22 @@ namespace minidb
         // Insert a record
         void insert(const std::string& key, const std::string& value);
 
+        BTreeIterator begin();
+
         PageId root_page_id() const { return root_page_id_; }
+
+    private:
+        PageId find_leaf_page(PageId current_page_id, const std::string& key);
+
+        PageId find_leftmost_leaf();
+
+        void split_leaf(PageId leaf_id, const std::string& key, const std::string& value);
+        void insert_into_parent(PageId left_child_id, const std::string& key, PageId right_child_id);
 
     private:
         BufferPoolManager& bpm_;
         PageId root_page_id_;
 
-        // Descend internal nodes to the correct leaf page
-        PageId find_leaf_page(PageId current_page_id, const std::string& key);
-        void split_leaf(PageId leaf_id, const std::string& key, const std::string& value);
-        void insert_into_parent(PageId left_child_id, const std::string& key, PageId right_child_id);
     };
 
 } // namespace minidb

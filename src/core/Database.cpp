@@ -242,11 +242,11 @@ namespace minidb
 
         // Form metadata for the deleted record (Tombstone)
         TupleMeta new_meta;
-        if (txn != nullptr) 
+        new_meta.is_deleted = true; // <-- deletion flag, also for system deletes (txn == nullptr)
+        if (txn != nullptr)
         {
             new_meta.txn_id = txn->get_transaction_id();
             new_meta.undo_lsn = undo_lsn;
-            new_meta.is_deleted = true; // <-- deletion flag
         }
 
         std::string encoded_value = encode_value(new_meta, TOMBSTONE);
@@ -255,6 +255,87 @@ namespace minidb
         wal_->flush();
 
         btree_->insert(key, encoded_value);
+    }
+
+    std::vector<std::pair<std::string, std::string>> Database::scan(Transaction* txn) 
+    {
+        std::vector<std::pair<std::string, std::string>> result;
+        
+        // Get an iterator pointing to the very first record in the B+ tree
+        auto it = btree_->begin();
+
+        // Manage the temporary transaction through a smart pointer
+        std::shared_ptr<Transaction> temp_txn = nullptr;
+        Transaction* effective_txn = txn;
+
+        if (effective_txn == nullptr && txn_mgr_ != nullptr)
+        {
+            temp_txn = txn_mgr_->begin();
+            effective_txn = temp_txn.get();
+        }
+
+        while (!it.is_end()) 
+        {
+            std::string key = it.get_key();
+            std::string raw_val = it.get_value();
+            
+            // Advance the iterator to the next record while the current page remains pinned
+            it.advance();
+
+            // If key or value are empty (e.g., deleted or corrupted cells), skip
+            if (key.empty() || raw_val.empty()) 
+            {
+                continue;
+            }
+
+            auto [meta, val] = decode_value(raw_val);
+
+            if (effective_txn == nullptr) 
+            {
+                if (!meta.is_deleted && val != TOMBSTONE) 
+                {
+                    result.push_back({key, val});
+                }
+                continue;
+            }
+
+            // --- Visibility Engine (MVCC): visibility check for the current transaction ---
+            auto current_meta = meta;
+            auto current_val = val;
+            bool is_visible = true;
+            
+            while (!effective_txn->get_read_view().is_visible(current_meta.txn_id)) 
+            {
+                if (current_meta.undo_lsn == 0) 
+                {
+                    is_visible = false;
+                    break;
+                }
+
+                auto undo_record = txn_mgr_->get_undo_record(current_meta.undo_lsn);
+                if (!undo_record) 
+                {
+                    is_visible = false;
+                    break;
+                }
+
+                current_meta = undo_record->get_old_meta();
+                current_val = undo_record->get_old_value();
+            }
+
+            if (is_visible && !current_meta.is_deleted && current_val != TOMBSTONE) 
+            {
+                result.push_back({key, current_val});
+            }
+        }
+
+        // Close the temporary transaction so it does not leak
+        if (temp_txn != nullptr && txn_mgr_ != nullptr)
+        {
+            txn_mgr_->commit(temp_txn.get());
+        }
+
+        return result;
     }
 
     std::string Database::encode_value(const TupleMeta& meta, const std::string& val) 
@@ -277,7 +358,7 @@ namespace minidb
         // Read the structure from the beginning of the string
         std::memcpy(&meta, raw_val.data(), sizeof(TupleMeta));
         
-        // Trim off the rest — that's the actual value
+        // Trim off the rest - that's the actual value
         std::string val = raw_val.substr(sizeof(TupleMeta));
         
         return {meta, val};

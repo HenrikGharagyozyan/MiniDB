@@ -18,7 +18,7 @@ namespace minidb
         explicit LRUReplacer(size_t num_frames);
         ~LRUReplacer() = default;
 
-        // Select a victim — the oldest frame to evict.
+        // Select a victim - the oldest frame to evict.
         // Writes the frame ID to the pointer and returns true. Returns false if there is nothing to evict.
         bool victim(FrameId* frame_id);
 

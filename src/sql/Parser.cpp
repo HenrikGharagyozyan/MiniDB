@@ -135,6 +135,37 @@ namespace minidb
         
         consume(TokenType::FROM, "Expected 'FROM'");
         stmt->table_name = consume(TokenType::IDENTIFIER, "Expected table name").value;
+
+        // Check for optional WHERE clause using your TokenTypes!
+        if (!is_at_end() && peek().type == TokenType::WHERE) 
+        {
+            consume(TokenType::WHERE, "Expected WHERE");
+            
+            WhereClause where;
+            where.column_name = consume(TokenType::IDENTIFIER, "Expected column name after WHERE").value;
+            
+            // Check operator
+            if (!is_at_end() && peek().type == TokenType::EQUALS) 
+            {
+                where.op = consume(TokenType::EQUALS, "Expected '='").value;
+            } 
+            else 
+            {
+                throw std::runtime_error("Syntax Error: Expected '=' in WHERE clause");
+            }
+
+            // Value (NUMBER, STRING or IDENTIFIER)
+            if (match(TokenType::NUMBER) || match(TokenType::STRING) || match(TokenType::IDENTIFIER)) 
+            {
+                where.value = previous().value;
+            } 
+            else 
+            {
+                throw std::runtime_error("Syntax Error: Expected value after '=' in WHERE clause");
+            }
+
+            stmt->where_clause = where;
+        }
         
         consume(TokenType::SEMICOLON, "Expected ';' at the end of statement");
 
