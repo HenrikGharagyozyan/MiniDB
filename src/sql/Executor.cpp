@@ -1,6 +1,7 @@
 #include "minidb/sql/Executor.h"
 
 #include <sstream>
+#include <string_view>
 
 
 namespace minidb
@@ -129,11 +130,45 @@ namespace minidb
                         continue;
                     }
 
-                    // Check condition
-                    if (stmt->where_clause->op == "=" && fields[where_col_idx] != stmt->where_clause->value) 
+                    const std::string& field_val_str = fields[where_col_idx];
+                    const std::string& target_val_str = stmt->where_clause->value;
+                    const std::string& op = stmt->where_clause->op;
+                    
+                    bool match = false;
+                    
+                    // If the column is INT, convert to integer for proper numeric comparison
+                    if (schema.columns[where_col_idx].type == "INT") 
                     {
-                        continue; // Skip row if it doesn't match
+                        try 
+                        {
+                            int field_val = std::stoi(field_val_str);
+                            int target_val = std::stoi(target_val_str);
+                            
+                            if (op == "=")       match = (field_val == target_val);
+                            else if (op == "!=") match = (field_val != target_val);
+                            else if (op == ">")  match = (field_val > target_val);
+                            else if (op == "<")  match = (field_val < target_val);
+                            else if (op == ">=") match = (field_val >= target_val);
+                            else if (op == "<=") match = (field_val <= target_val);
+                        } 
+                        catch (...) 
+                        {
+                            match = false; // Fallback if conversion fails
+                        }
+                    } 
+                    else 
+                    {
+                        // String comparison for VARCHAR
+                        if (op == "=")       match = (field_val_str == target_val_str);
+                        else if (op == "!=") match = (field_val_str != target_val_str);
+                        else if (op == ">")  match = (field_val_str > target_val_str);
+                        else if (op == "<")  match = (field_val_str < target_val_str);
+                        else if (op == ">=") match = (field_val_str >= target_val_str);
+                        else if (op == "<=") match = (field_val_str <= target_val_str);
                     }
+
+                    if (!match) 
+                        continue; // Skip row if it doesn't match
                 }
 
                 std::cout << value << "\n";
