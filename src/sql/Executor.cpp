@@ -40,6 +40,10 @@ namespace minidb
         {
             execute_select(select_stmt, txn);
         } 
+        else if (auto delete_stmt = dynamic_cast<const DeleteStatement*>(stmt)) 
+        {
+            execute_delete(delete_stmt, txn);
+        }
         else 
         {
             throw std::runtime_error("Execution error: Unknown statement type");
@@ -180,6 +184,89 @@ namespace minidb
         {
             std::cout << "(No rows found)\n";
         }
+    }
+
+    void Executor::execute_delete(const DeleteStatement* stmt, Transaction* txn)
+    {
+        const auto& schema = catalog_.get_table(stmt->table_name);
+
+        int where_col_idx = -1;
+        if (stmt->where_clause.has_value()) 
+        {
+            for (size_t i = 0; i < schema.columns.size(); ++i) 
+            {
+                if (schema.columns[i].name == stmt->where_clause->column_name) 
+                {
+                    where_col_idx = static_cast<int>(i);
+                    break;
+                }
+            }
+            if (where_col_idx == -1) 
+            {
+                throw std::runtime_error("Execution error: Column '" + 
+                                         stmt->where_clause->column_name + 
+                                         "' not found in table '" + stmt->table_name + "'");
+            }
+        }
+
+        auto all_records = db_.scan(txn);
+        std::string prefix = stmt->table_name + ":";
+        int deleted_count = 0;
+
+        for (const auto& [key, value] : all_records) 
+        {
+            if (key.starts_with(prefix)) 
+            {
+                if (stmt->where_clause.has_value()) 
+                {
+                    auto fields = parse_csv_row(value);
+                    if (where_col_idx >= static_cast<int>(fields.size())) continue;
+
+                    const std::string& field_val_str = fields[where_col_idx];
+                    const std::string& target_val_str = stmt->where_clause->value;
+                    const std::string& op = stmt->where_clause->op;
+                    
+                    bool match = false;
+                    
+                    if (schema.columns[where_col_idx].type == "INT") 
+                    {
+                        try 
+                        {
+                            int field_val = std::stoi(field_val_str);
+                            int target_val = std::stoi(target_val_str);
+                            
+                            if (op == "=")       match = (field_val == target_val);
+                            else if (op == "!=") match = (field_val != target_val);
+                            else if (op == ">")  match = (field_val > target_val);
+                            else if (op == "<")  match = (field_val < target_val);
+                            else if (op == ">=") match = (field_val >= target_val);
+                            else if (op == "<=") match = (field_val <= target_val);
+                        } 
+                        catch (...) 
+                        {
+                            match = false; 
+                        }
+                    } 
+                    else 
+                    {
+                        if (op == "=")       match = (field_val_str == target_val_str);
+                        else if (op == "!=") match = (field_val_str != target_val_str);
+                        else if (op == ">")  match = (field_val_str > target_val_str);
+                        else if (op == "<")  match = (field_val_str < target_val_str);
+                        else if (op == ">=") match = (field_val_str >= target_val_str);
+                        else if (op == "<=") match = (field_val_str <= target_val_str);
+                    }
+
+                    if (!match) continue;
+                }
+
+                // Call delete on the underlying storage
+                db_.remove(key, txn);
+                deleted_count++;
+            }
+        }
+
+        std::cout << deleted_count << " row(s) deleted from '" << stmt->table_name << "'.\n";
     }
 
 } // namespace minidb
