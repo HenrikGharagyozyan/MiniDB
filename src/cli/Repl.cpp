@@ -6,10 +6,25 @@
 #include <sstream>
 
 
-namespace minidb 
+namespace minidb
 {
 
-    Repl::Repl(Database& db) 
+    // Returns the second whitespace-separated word of the line, in upper case.
+    // Needed because DELETE belongs to both languages: "DELETE FROM <table>" is SQL,
+    // while "DELETE <key>" is the KV command.
+    static std::string second_word_upper(const std::string& line)
+    {
+        std::istringstream iss(line);
+        std::string first, second;
+        iss >> first >> second;
+
+        for (auto& c : second)
+            c = toupper(c);
+
+        return second;
+    }
+
+    Repl::Repl(Database& db)
         : db_(db)
         , current_txn_(nullptr)
         , executor_(db_, catalog_)
@@ -83,7 +98,10 @@ namespace minidb
         try
         {
             // --- SQL COMMANDS HANDLER ---
-            if (upper_cmd == "CREATE" || upper_cmd == "INSERT" || upper_cmd == "SELECT") 
+            // "DELETE FROM ..." goes to the SQL engine, plain "DELETE <key>" stays a KV command
+            bool is_sql_delete = (upper_cmd == "DELETE" && second_word_upper(line) == "FROM");
+
+            if (upper_cmd == "CREATE" || upper_cmd == "INSERT" || upper_cmd == "SELECT" || is_sql_delete)
             {
                 Tokenizer tokenizer(line);
                 auto tokens = tokenizer.tokenize();

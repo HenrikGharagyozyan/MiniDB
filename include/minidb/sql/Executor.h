@@ -24,6 +24,8 @@ namespace minidb
 
         void execute_select(const SelectStatement* stmt, Transaction* txn);
 
+        void execute_delete(const DeleteStatement* stmt, Transaction* txn);
+
     private:
         Database& db_;
         Catalog& catalog_;

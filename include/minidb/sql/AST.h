@@ -60,4 +60,14 @@ namespace minidb
         std::optional<WhereClause> where_clause;
     };
 
+    
+    // --- Structures for DELETE ---
+
+    // AST for a query: DELETE FROM <name> WHERE <cond>;
+    struct DeleteStatement : public SQLStatement 
+    {
+        std::string table_name;
+        std::optional<WhereClause> where_clause;
+    };
+
 } // namespace minidb
