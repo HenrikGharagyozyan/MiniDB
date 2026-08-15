@@ -8,7 +8,7 @@ namespace minidb
     enum class TokenType 
     {
         // SQL keywords
-        SELECT, FROM, WHERE, INSERT, INTO, VALUES, CREATE, TABLE, INT, VARCHAR,
+        SELECT, FROM, WHERE, INSERT, INTO, VALUES, CREATE, TABLE, INT, VARCHAR, DELETE,
         
         // Identifiers (e.g. table names like "users" or column names like "id")
         IDENTIFIER, 
