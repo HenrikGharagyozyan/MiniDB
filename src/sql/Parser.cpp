@@ -58,6 +58,10 @@ namespace minidb
         {
             return parse_select();
         }
+        else if (match(TokenType::DELETE)) 
+        {
+            return parse_delete();
+        }
 
         throw std::runtime_error("Syntax Error: Unknown or unsupported SQL command.");
     }
@@ -156,6 +160,50 @@ namespace minidb
             else 
             {
                 throw std::runtime_error("Syntax Error: Expected operator (=, !=, >, <, >=, <=) in WHERE clause");
+            }
+
+            if (match(TokenType::NUMBER) || match(TokenType::STRING) || match(TokenType::IDENTIFIER)) 
+            {
+                where.value = previous().value;
+            } 
+            else 
+            {
+                throw std::runtime_error("Syntax Error: Expected value after operator in WHERE clause");
+            }
+
+            stmt->where_clause = where;
+        }
+        
+        consume(TokenType::SEMICOLON, "Expected ';' at the end of statement");
+
+        return stmt;
+    }
+
+    std::unique_ptr<SQLStatement> Parser::parse_delete() 
+    {
+        auto stmt = std::make_unique<DeleteStatement>();
+        
+        consume(TokenType::FROM, "Expected 'FROM' after 'DELETE'");
+        stmt->table_name = consume(TokenType::IDENTIFIER, "Expected table name").value;
+
+        if (!is_at_end() && peek().type == TokenType::WHERE) 
+        {
+            consume(TokenType::WHERE, "Expected WHERE");
+            
+            WhereClause where;
+            where.column_name = consume(TokenType::IDENTIFIER, "Expected column name after WHERE").value;
+            
+            TokenType op_type = peek().type;
+            if (op_type == TokenType::EQUALS || op_type == TokenType::NOT_EQUALS ||
+                op_type == TokenType::GREATER || op_type == TokenType::LESS ||
+                op_type == TokenType::GREATER_EQUALS || op_type == TokenType::LESS_EQUALS) 
+            {
+                where.op = peek().value;
+                pos_++; 
+            } 
+            else 
+            {
+                throw std::runtime_error("Syntax Error: Expected operator in WHERE clause");
             }
 
             if (match(TokenType::NUMBER) || match(TokenType::STRING) || match(TokenType::IDENTIFIER)) 

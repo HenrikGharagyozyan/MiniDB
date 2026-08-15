@@ -35,6 +35,7 @@ namespace minidb
         std::unique_ptr<SQLStatement> parse_create_table();
         std::unique_ptr<SQLStatement> parse_insert();
         std::unique_ptr<SQLStatement> parse_select();
+        std::unique_ptr<SQLStatement> parse_delete();
 
     private:
         std::vector<Token> tokens_;
