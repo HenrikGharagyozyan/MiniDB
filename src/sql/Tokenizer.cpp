@@ -175,6 +175,7 @@ namespace minidb
         if (upper_val == "TABLE")   return { TokenType::TABLE, val   };
         if (upper_val == "INT")     return { TokenType::INT, val     };
         if (upper_val == "VARCHAR") return { TokenType::VARCHAR, val };
+        if (upper_val == "DELETE")  return { TokenType::DELETE, val  };
 
         // If this is not a keyword, then it is just an identifier (table name, column name, etc.)
         return { TokenType::IDENTIFIER, val };
