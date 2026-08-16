@@ -1,0 +1,46 @@
+name: Release
+
+# Publishing is driven by tags: `git tag v0.4.0 && git push origin v0.4.0`
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  release:
+    name: Build and publish
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write # Needed to create the GitHub release
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
+
+      - name: Build
+        run: cmake --build build -j"$(nproc)"
+
+      # Never publish a binary that cannot answer a query
+      - name: Smoke test
+        run: bash scripts/smoke_test.sh build/minidb_cli
+
+      - name: Package
+        run: |
+          staging="minidb-${GITHUB_REF_NAME}-linux-x86_64"
+          mkdir -p "$staging"
+          cp build/minidb_cli build/minidb_bench build/libminidb_core.a "$staging"/
+          cp README.md LICENSE "$staging"/
+          cp -r include "$staging"/
+          tar czf "${staging}.tar.gz" "$staging"
+          sha256sum "${staging}.tar.gz" > "${staging}.tar.gz.sha256"
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "MiniDB $GITHUB_REF_NAME" \
+            --generate-notes \
+            minidb-*.tar.gz minidb-*.tar.gz.sha256

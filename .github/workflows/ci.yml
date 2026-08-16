@@ -1,0 +1,102 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A new push to the same branch cancels the run still in flight
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: ${{ matrix.compiler }} / ${{ matrix.build_type }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      # Report every broken configuration, not just the first one
+      fail-fast: false
+      matrix:
+        compiler: [gcc, clang]
+        build_type: [Debug, Release]
+        include:
+          - compiler: gcc
+            cc: gcc
+            cxx: g++
+          - compiler: clang
+            cc: clang
+            cxx: clang++
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # GoogleTest is pulled in by FetchContent, so keep it between runs
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: build/_deps
+          key: deps-${{ runner.os }}-${{ matrix.compiler }}-${{ matrix.build_type }}-${{ hashFiles('CMakeLists.txt') }}
+          restore-keys: |
+            deps-${{ runner.os }}-${{ matrix.compiler }}-${{ matrix.build_type }}-
+
+      - name: Configure
+        run: >
+          cmake -S . -B build
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          -DCMAKE_C_COMPILER=${{ matrix.cc }}
+          -DCMAKE_CXX_COMPILER=${{ matrix.cxx }}
+
+      # The project is compiled with -Wall -Wextra -Wpedantic -Werror,
+      # so any new warning fails the build here.
+      - name: Build
+        run: cmake --build build -j"$(nproc)"
+
+      - name: Unit tests
+        run: ctest --test-dir build --output-on-failure
+
+      - name: REPL smoke test
+        run: bash scripts/smoke_test.sh build/minidb_cli
+
+      # Exercises leaf splits, MVCC reads, rollback and vacuum in one go.
+      # Kept small so it stays a correctness check, not a timing measurement.
+      - name: Benchmark smoke run
+        run: ./build/minidb_bench 500
+
+  sanitizers:
+    name: ASan + UBSan
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # The engine reinterpret_casts and memcpys its way around raw 4 KB page
+      # buffers, which is exactly the kind of code these sanitizers catch.
+      - name: Configure
+        run: >
+          cmake -S . -B build-asan
+          -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer -g"
+
+      - name: Build
+        run: cmake --build build-asan -j"$(nproc)"
+
+      - name: Unit tests
+        env:
+          ASAN_OPTIONS: detect_leaks=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: ctest --test-dir build-asan --output-on-failure
+
+      - name: REPL smoke test
+        env:
+          ASAN_OPTIONS: detect_leaks=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: bash scripts/smoke_test.sh build-asan/minidb_cli
+
+      - name: Benchmark under sanitizers
+        env:
+          ASAN_OPTIONS: detect_leaks=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: ./build-asan/minidb_bench 500
