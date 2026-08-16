@@ -101,7 +101,7 @@ namespace minidb
             // "DELETE FROM ..." goes to the SQL engine, plain "DELETE <key>" stays a KV command
             bool is_sql_delete = (upper_cmd == "DELETE" && second_word_upper(line) == "FROM");
 
-            if (upper_cmd == "CREATE" || upper_cmd == "INSERT" || upper_cmd == "SELECT" || is_sql_delete)
+            if (upper_cmd == "CREATE" || upper_cmd == "INSERT" || upper_cmd == "SELECT" || upper_cmd == "UPDATE" || is_sql_delete)
             {
                 Tokenizer tokenizer(line);
                 auto tokens = tokenizer.tokenize();
