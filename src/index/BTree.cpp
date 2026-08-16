@@ -111,10 +111,13 @@ namespace minidb
 
         // 1. Collect all existing records plus the new record
         std::vector<std::pair<std::string, std::string>> records;
-        for (uint16_t i = 0; i < old_leaf.num_records(); ++i) 
+        for (uint16_t i = 0; i < old_leaf.num_records(); ++i)
         {
             auto rec = old_leaf.get_record(i);
-            if (rec) 
+            // insert() is an upsert, so when the incoming key is already on the
+            // page the old version is superseded. Keeping it would put two cells
+            // with the same key into the tree.
+            if (rec && rec->first != new_key)
             {
                 records.push_back(*rec);
             }
@@ -212,17 +215,50 @@ namespace minidb
         PageData* parent_raw = bpm_.fetch_page(parent_id);
         Page parent(*parent_raw);
 
-        if (parent.rightmost_child() == left_child_id) 
+        bool inserted = false;
+
+        if (parent.rightmost_child() == left_child_id)
         {
-            parent.insert_internal_cell(key, left_child_id);
-            parent.set_rightmost_child(right_child_id);
-        } 
-        else 
+            // The page we split was the rightmost child, so the separator simply
+            // becomes the last cell and the new page becomes the rightmost child.
+            inserted = parent.insert_internal_cell(key, left_child_id);
+            if (inserted)
+            {
+                parent.set_rightmost_child(right_child_id);
+            }
+        }
+        else
         {
-            parent.insert_internal_cell(key, left_child_id);
+            // The page we split is referenced by an existing cell. After the split
+            // that cell's subtree starts at the separator, so the new cell
+            // (separator -> left page) goes in front of it and the existing cell
+            // has to be repointed at the new right page. Without this the right
+            // page is unreachable from the root and every key in it is lost to
+            // get(), even though scan() still sees it through the leaf chain.
+            inserted = parent.insert_internal_cell(key, left_child_id);
+
+            if (inserted)
+            {
+                // The cell we just inserted sits at idx, the stale reference to
+                // the split page is the one directly behind it.
+                uint16_t idx = parent.find_cell_index(key);
+                if (idx + 1 < parent.num_records() &&
+                    parent.get_internal_cell(idx + 1).second == left_child_id)
+                {
+                    parent.set_internal_child(idx + 1, right_child_id);
+                }
+            }
         }
 
         bpm_.unpin_page(parent_id, true);
+
+        // Splitting internal nodes is not implemented yet: once a parent runs out
+        // of room the separator cannot be recorded, and silently dropping it would
+        // corrupt the tree. Fail loudly instead.
+        if (!inserted)
+        {
+            throw std::runtime_error("BTree: internal node is full (internal node splits are not implemented)");
+        }
     }
 
 } // namespace minidb
