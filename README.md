@@ -1,5 +1,7 @@
 # MiniDB
 
+[![CI](https://github.com/HenrikGharagyozyan/MiniDB/actions/workflows/ci.yml/badge.svg)](https://github.com/HenrikGharagyozyan/MiniDB/actions/workflows/ci.yml)
+
 A small relational database engine written from scratch in C++20 — no storage library, no SQL library, no third-party runtime dependencies. Data lives in 4 KB pages managed by a buffer pool, is indexed by a B+ tree, is logged ahead of every page write for crash recovery, and is queried through a hand-written SQL tokenizer, parser and executor. Transactions are isolated with MVCC snapshots and strict two-phase locking.
 
 It is a learning project, built one subsystem at a time. It is not production software — see [Known limitations](#known-limitations), which is deliberately detailed.
@@ -34,6 +36,7 @@ id | name
 - [Transactions](#transactions)
 - [Benchmarks](#benchmarks)
 - [Tests](#tests)
+- [Continuous integration](#continuous-integration)
 - [Known limitations](#known-limitations)
 - [License](#license)
 
@@ -252,6 +255,38 @@ cd build && ctest --output-on-failure
 ```
 
 12 GoogleTest binaries cover the stack bottom to top: pager, page layout, LRU replacer, buffer pool, B+ tree, WAL, database engine, lock manager, strict 2PL, read view, MVCC, and the SQL parser.
+
+The REPL itself has no unit tests, so it is covered by an end-to-end script that drives the real binary and checks what it prints:
+
+```bash
+bash scripts/smoke_test.sh build/minidb_cli
+```
+
+It walks through SQL CRUD, `WHERE` filtering, commit and rollback, the key-value commands and error handling — nine cases in TAP-style output.
+
+## Continuous integration
+
+Two GitHub Actions workflows, neither of which needs any secret or external service.
+
+**[`ci.yml`](.github/workflows/ci.yml)** runs on every push to `main`, every pull request, and on demand:
+
+| Job | What it does |
+| --- | --- |
+| `build-and-test` | Builds the matrix gcc × clang × Debug × Release (4 configurations), then runs `ctest`, the REPL smoke test and a short benchmark run |
+| `sanitizers` | Rebuilds with AddressSanitizer + UndefinedBehaviorSanitizer and runs the same three checks under them |
+
+The sanitizer job earns its place here: the engine spends its life `memcpy`ing and `reinterpret_cast`ing inside raw 4 KB page buffers, which is precisely the code ASan and UBSan are good at policing. The benchmark doubles as a correctness check — it verifies its own row counts and lookup hit rates, so a broken split or a lost key fails the build rather than quietly printing a fast number.
+
+Because the project compiles with `-Werror`, any new warning fails CI on all four configurations.
+
+**[`release.yml`](.github/workflows/release.yml)** runs when a version tag is pushed:
+
+```bash
+git tag v0.4.0
+git push origin v0.4.0
+```
+
+It builds `Release`, runs the smoke test — no binary is published unless it can answer a query — then packages the CLI, the benchmark runner, the static library, the public headers, the README and the licence into `minidb-<tag>-linux-x86_64.tar.gz`, writes a SHA-256 checksum, and creates the GitHub release with generated notes. Publishing uses the preinstalled `gh` CLI and the automatic `GITHUB_TOKEN`, so there are no third-party actions in the release path.
 
 ## Known limitations
 
