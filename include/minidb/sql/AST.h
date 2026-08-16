@@ -70,4 +70,15 @@ namespace minidb
         std::optional<WhereClause> where_clause;
     };
 
+
+    // --- Structures for UPDATE ---
+    
+    struct UpdateStatement : public SQLStatement 
+    {
+        std::string table_name;
+        std::string set_column_name;
+        std::string set_value;
+        std::optional<WhereClause> where_clause;
+    };
+
 } // namespace minidb
