@@ -31,6 +31,14 @@ target_include_directories(minidb_core PUBLIC include)
 add_executable(minidb_cli src/cli/Repl.cpp src/cli/main.cpp)
 target_link_libraries(minidb_cli PRIVATE minidb_core)
 
+# --- Benchmark Executable ---
+option(BUILD_BENCHMARKS "Build the benchmark runner" ON)
+
+if(BUILD_BENCHMARKS)
+    add_executable(minidb_bench bench/main.cpp)
+    target_link_libraries(minidb_bench PRIVATE minidb_core)
+endif()
+
 # --- Testing Setup ---
 option(BUILD_TESTING "Build unit tests" ON)
 
