@@ -81,10 +81,26 @@ namespace minidb
         std::memcpy(ptr, &offset, sizeof(uint16_t));
     }
 
-    std::string Page::get_key(uint16_t index) const 
+    std::string Page::get_key(uint16_t index) const
     {
         uint16_t offset = cell_offset(index);
         const uint8_t* ptr = data_.data() + offset;
+
+        // The two node types store their cells differently:
+        //   leaf:     [key_len][val_len][key][value]
+        //   internal: [left_child_id][key_len][key]
+        // Reading an internal cell with the leaf layout would treat the first
+        // half of the child id as the key length, so pick the layout by type.
+        if (node_type() == NodeType::INTERNAL)
+        {
+            ptr += sizeof(uint32_t); // Skip the left child id
+
+            uint16_t key_len = 0;
+            std::memcpy(&key_len, ptr, sizeof(uint16_t));
+            ptr += sizeof(uint16_t); // Skip key_len
+
+            return std::string(reinterpret_cast<const char*>(ptr), key_len);
+        }
 
         uint16_t key_len = 0;
         std::memcpy(&key_len, ptr, sizeof(uint16_t));
@@ -301,6 +317,13 @@ namespace minidb
         std::string key(reinterpret_cast<const char*>(data_.data() + offset + sizeof(uint32_t) + sizeof(uint16_t)), key_len);
         
         return {key, child_id};
+    }
+
+    void Page::set_internal_child(uint16_t index, PageId child_id)
+    {
+        // The left child id is the first field of an internal cell
+        uint16_t offset = cell_offset(index);
+        std::memcpy(data_.data() + offset, &child_id, sizeof(uint32_t));
     }
 
 } // namespace minidb

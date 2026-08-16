@@ -70,6 +70,9 @@ namespace minidb
 
         std::pair<std::string, PageId> get_internal_cell(uint16_t index) const;
 
+        // Repoint an existing internal cell at another child page
+        void set_internal_child(uint16_t index, PageId child_id);
+
         // Helper methods
         uint16_t num_records() const;
         size_t free_space_left() const;
