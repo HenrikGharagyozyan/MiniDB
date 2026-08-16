@@ -62,6 +62,10 @@ namespace minidb
         {
             return parse_delete();
         }
+        else if (match(TokenType::UPDATE)) 
+        {
+            return parse_update();
+        }
 
         throw std::runtime_error("Syntax Error: Unknown or unsupported SQL command.");
     }
@@ -220,6 +224,62 @@ namespace minidb
         
         consume(TokenType::SEMICOLON, "Expected ';' at the end of statement");
 
+        return stmt;
+    }
+
+    std::unique_ptr<SQLStatement> Parser::parse_update() 
+    {
+        auto stmt = std::make_unique<UpdateStatement>();
+        
+        stmt->table_name = consume(TokenType::IDENTIFIER, "Expected table name after UPDATE").value;
+        
+        consume(TokenType::SET, "Expected 'SET'");
+        stmt->set_column_name = consume(TokenType::IDENTIFIER, "Expected column name after SET").value;
+        
+        consume(TokenType::EQUALS, "Expected '=' in SET clause");
+        
+        if (match(TokenType::NUMBER) || match(TokenType::STRING)) 
+        {
+            stmt->set_value = previous().value;
+        } 
+        else 
+        {
+            throw std::runtime_error("Syntax Error: Expected value in SET clause");
+        }
+
+        if (!is_at_end() && peek().type == TokenType::WHERE) 
+        {
+            consume(TokenType::WHERE, "Expected WHERE");
+            
+            WhereClause where;
+            where.column_name = consume(TokenType::IDENTIFIER, "Expected column name after WHERE").value;
+            
+            TokenType op_type = peek().type;
+            if (op_type == TokenType::EQUALS || op_type == TokenType::NOT_EQUALS ||
+                op_type == TokenType::GREATER || op_type == TokenType::LESS ||
+                op_type == TokenType::GREATER_EQUALS || op_type == TokenType::LESS_EQUALS) 
+            {
+                where.op = peek().value;
+                pos_++; 
+            } 
+            else 
+            {
+                throw std::runtime_error("Syntax Error: Expected operator in WHERE clause");
+            }
+
+            if (match(TokenType::NUMBER) || match(TokenType::STRING) || match(TokenType::IDENTIFIER)) 
+            {
+                where.value = previous().value;
+            } 
+            else 
+            {
+                throw std::runtime_error("Syntax Error: Expected value after operator in WHERE clause");
+            }
+
+            stmt->where_clause = where;
+        }
+        
+        consume(TokenType::SEMICOLON, "Expected ';' at the end of statement");
         return stmt;
     }
 
